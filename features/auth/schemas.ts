@@ -1,4 +1,4 @@
-import * as z from "zod";
+import z from "zod";
 
 export const usernameSchema = z
   .string()
@@ -16,17 +16,9 @@ export const passwordSchema = z
 
 export const emailSchema = z.email("Invalid email address");
 
-export const signUpSchema = z.object({
-  username: usernameSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  name: z.string().min(1, "Name is required").max(100),
-});
-
 export const signInSchema = z.object({
   username: usernameSchema,
   password: z.string().min(1, "Password is required"),
 });
 
-export type SignUpInput = z.infer<typeof signUpSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;

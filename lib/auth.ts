@@ -1,10 +1,12 @@
 import "server-only";
 
 import { betterAuth } from "better-auth";
-import { username } from "better-auth/plugins";
-import { prismaAdapter } from "@better-auth/prisma-adapter";
-import { nextCookies } from "better-auth/next-js";
+
 import { prisma } from "@/lib/prisma";
+import { username } from "better-auth/plugins";
+import { nextCookies } from "better-auth/next-js";
+import { prismaAdapter } from "@better-auth/prisma-adapter";
+import { admin as adminPlugin } from "better-auth/plugins/admin";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -15,7 +17,7 @@ export const auth = betterAuth({
     minPasswordLength: 8,
     autoSignIn: true,
   },
-  plugins: [username(), nextCookies()],
+  plugins: [username(), adminPlugin(), nextCookies()],
   trustedOrigins: [process.env.BETTER_AUTH_URL ?? "http://localhost:3000"],
 });
 
