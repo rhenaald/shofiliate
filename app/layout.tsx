@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+
 import { Poppins } from "next/font/google";
-import "./globals.css";
+import { Toaster } from "@/components/ui/toast";
+
 import { Providers } from "./providers";
+
+import "./globals.css";
 
 const fontSans = Poppins({
   subsets: ["latin"],
@@ -23,6 +27,7 @@ export default function RootLayout({
     <html lang="en" className={`${fontSans.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
+        <Toaster />
       </body>
     </html>
   );
