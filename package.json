@@ -11,6 +11,9 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
+    "db:seed": "tsx --conditions=react-server prisma/seed.ts",
+    "db:seed:dev": "tsx --conditions=react-server prisma/seed.ts --env=development",
+    "db:seed:prod": "tsx --conditions=react-server prisma/seed.ts --env=production",
     "db:studio": "prisma studio"
   },
   "dependencies": {
