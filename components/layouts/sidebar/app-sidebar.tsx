@@ -6,6 +6,7 @@ import { NavMain } from "@/components/layouts/sidebar/nav-main";
 import { NavProjects } from "@/components/layouts/sidebar/nav-projects";
 import { NavSecondary } from "@/components/layouts/sidebar/nav-secondary";
 import { NavUser } from "@/components/layouts/sidebar/nav-user";
+import { useSession } from "@/lib/auth-client";
 import {
   Sidebar,
   SidebarContent,
@@ -29,11 +30,6 @@ import {
 } from "lucide-react";
 
 const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Playground",
@@ -152,6 +148,7 @@ const data = {
   ],
 };
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { data: session } = useSession();
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -175,7 +172,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        {session?.user ? (
+          <NavUser
+            user={{
+              name: session.user.name,
+              email: session.user.email,
+              image: session.user.image,
+            }}
+          />
+        ) : null}
       </SidebarFooter>
     </Sidebar>
   );
