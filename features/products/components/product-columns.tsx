@@ -76,16 +76,6 @@ export const productColumns: ColumnDef<DataTableFeatures, ProductRow>[] = [
     ),
   },
   {
-    id: "number",
-    header: "No",
-    enableSorting: false,
-    enableHiding: false,
-    cell: ({ row, table }) => {
-      const pagination = table.atoms.pagination.get();
-      return pagination.pageIndex * pagination.pageSize + row.index + 1;
-    },
-  },
-  {
     id: "productName",
     accessorKey: "productName",
     header: ({ column }) => (
@@ -135,7 +125,7 @@ export const productColumns: ColumnDef<DataTableFeatures, ProductRow>[] = [
   { id: "numAffiliate", header: "Num of Affiliate", enableSorting: false, cell: () => <Placeholder /> },
   {
     id: "affiliate",
-    header: "Affiliate Link",
+    header: () => <div className="text-center">Affiliate Link</div>,
     enableSorting: false,
     enableHiding: false,
     cell: ({ row }) => {

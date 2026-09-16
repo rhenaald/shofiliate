@@ -22,7 +22,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
-import { Copy, Pin, Download, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
+import { Copy, Pin, Download, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -91,7 +91,50 @@ export function ProductTable({ data, isLoading = false }: { data: ProductRow[]; 
   });
   const page = table.atoms.pagination.get();
 const selectedCount = table.getFilteredSelectedRowModel().rows.length;
-const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" : "asc"}` : "none";
+const activeSort = sorting[0];
+const sortValue = activeSort
+  ? `${SORTABLE_COLUMNS.find((c) => c.id === activeSort.id)?.label ?? activeSort.id} (${activeSort.desc ? "Desc" : "Asc"})`
+  : "Default";
+const [sortDir, setSortDir] = React.useState<"asc" | "desc">("asc");
+const [jumpKey, setJumpKey] = React.useState<number | null>(null);
+const [jumpValue, setJumpValue] = React.useState("");
+const pageCount = table.getPageCount();
+
+function applySort(columnId: string) {
+  const current = sorting.find((s) => s.id === columnId);
+  if (current && (current.desc ? "desc" : "asc") === sortDir) {
+    table.resetSorting();
+  } else {
+    table.getColumn(columnId)?.toggleSorting(sortDir === "desc");
+  }
+}
+
+function applySortDir(dir: "asc" | "desc") {
+  setSortDir(dir);
+  const current = sorting[0];
+  if (current) table.getColumn(current.id)?.toggleSorting(dir === "desc");
+}
+
+function pageItems(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  const pages = [...new Set([0, total - 1, current - 1, current, current + 1])]
+    .filter((p) => p >= 0 && p < total)
+    .sort((a, b) => a - b);
+  const out: (number | "ellipsis")[] = [];
+  let prev = -2;
+  pages.forEach((p) => {
+    if (p - prev > 1) out.push("ellipsis");
+    out.push(p);
+    prev = p;
+  });
+  return out;
+}
+
+function goJump() {
+  const n = Number.parseInt(jumpValue, 10);
+  if (Number.isFinite(n)) table.setPageIndex(Math.min(Math.max(n - 1, 0), Math.max(pageCount - 1, 0)));
+  setJumpKey(null);
+}
 
   return (
     <div className="space-y-4">
@@ -116,26 +159,29 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="Search product or shop..."
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            table.setPageIndex(0);
-          }}
-          className="max-w-xs"
-        />
+        <div className="relative w-full max-w-xs">
+          <Input
+            placeholder="Search product or shop..."
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              table.setPageIndex(0);
+            }}
+            className="pr-9"
+          />
+          <Search className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="outline" size="sm">
-                  Category: {category === "all" ? "All" : category}
-                  <ChevronDown className="size-3.5" />
+                <Button variant="outline" size="sm" className="max-w-72">
+                  <span className="min-w-0 truncate">Category: {category === "all" ? "All" : category}</span>
+                  <ChevronDown className="size-3.5 shrink-0" />
                 </Button>
               }
             />
-            <DropdownMenuContent align="end" className="max-h-64">
+            <DropdownMenuContent align="end" className="max-h-64 w-72">
               <DropdownMenuRadioGroup
                 value={category}
                 onValueChange={(v) => {
@@ -155,23 +201,23 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="outline" size="sm">
-                  Sort: {sortValue === "none" ? "Default" : sortValue}
-                  <ChevronDown className="size-3.5" />
+                <Button variant="outline" size="sm" className="max-w-64">
+                  <span className="min-w-0 truncate">Sort: {sortValue}</span>
+                  <ChevronDown className="size-3.5 shrink-0" />
                 </Button>
               }
             />
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => table.resetSorting()}>Default</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuRadioGroup value={sortDir} onValueChange={(v) => applySortDir(v as "asc" | "desc")}>
+                <DropdownMenuRadioItem value="asc">Ascending ↑</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="desc">Descending ↓</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              {SORTABLE_COLUMNS.flatMap((c) => [
-                <DropdownMenuItem key={`${c.id}-asc`} onClick={() => table.getColumn(c.id)?.toggleSorting(false)}>
-                  {c.label} ↑
-                </DropdownMenuItem>,
-                <DropdownMenuItem key={`${c.id}-desc`} onClick={() => table.getColumn(c.id)?.toggleSorting(true)}>
-                  {c.label} ↓
-                </DropdownMenuItem>,
-              ])}
+              {SORTABLE_COLUMNS.map((c) => (
+                <DropdownMenuItem key={c.id} onClick={() => applySort(c.id)}>
+                  {c.label}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -183,7 +229,7 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
                 </Button>
               }
             />
-            <DropdownMenuContent align="end" className="max-h-64">
+            <DropdownMenuContent align="end" className="max-h-64 w-56">
               {table
                 .getAllColumns()
                 .filter((col) => col.getCanHide())
@@ -208,13 +254,7 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
                 {hg.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={
-                      header.column.id === "select"
-                        ? "sticky left-0 z-10 bg-background"
-                        : header.column.id === "number"
-                          ? "sticky left-10 z-10 bg-background"
-                          : undefined
-                    }
+                    className={header.column.id === "select" ? "sticky left-0 z-10 bg-background" : undefined}
                   >
                     {header.isPlaceholder ? null : <table.FlexRender header={header} />}
                   </TableHead>
@@ -237,13 +277,7 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className={
-                        cell.column.id === "select"
-                          ? "sticky left-0 z-10 bg-background"
-                          : cell.column.id === "number"
-                            ? "sticky left-10 z-10 bg-background"
-                            : undefined
-                      }
+                      className={cell.column.id === "select" ? "sticky left-0 z-10 bg-background" : undefined}
                     >
                       <table.FlexRender cell={cell} />
                     </TableCell>
@@ -302,10 +336,7 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="ml-auto flex items-center gap-1">
-          <span className="mr-2 text-sm text-muted-foreground">
-            Page {page.pageIndex + 1} of {table.getPageCount()}
-          </span>
+        <div className="ml-auto flex flex-wrap items-center gap-1">
           <Button variant="outline" size="icon" className="size-8" onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>
             <ChevronsLeft className="size-4" />
             <span className="sr-only">First page</span>
@@ -314,6 +345,53 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
             <ChevronLeft className="size-4" />
             <span className="sr-only">Previous page</span>
           </Button>
+          {pageItems(page.pageIndex, pageCount).map((item, i) =>
+            item === "ellipsis" ? (
+              jumpKey === i ? (
+                <span key={`jump-${i}`} className="flex items-center gap-1">
+                  <Input
+                    autoFocus
+                    value={jumpValue}
+                    onChange={(e) => setJumpValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") goJump();
+                    }}
+                    placeholder="#"
+                    aria-label="Go to page number"
+                    className="h-8 w-16"
+                  />
+                  <Button variant="outline" size="sm" className="h-8" onClick={goJump}>
+                    Go
+                  </Button>
+                </span>
+              ) : (
+                <Button
+                  key={`ellipsis-${i}`}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => {
+                    setJumpValue("");
+                    setJumpKey(i);
+                  }}
+                  aria-label="Go to specific page"
+                >
+                  ...
+                </Button>
+              )
+            ) : (
+              <Button
+                key={item}
+                variant={item === page.pageIndex ? "default" : "outline"}
+                size="icon"
+                className="size-8"
+                onClick={() => table.setPageIndex(item)}
+                aria-label={`Go to page ${item + 1}`}
+              >
+                {item + 1}
+              </Button>
+            ),
+          )}
           <Button variant="outline" size="icon" className="size-8" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
             <ChevronRight className="size-4" />
             <span className="sr-only">Next page</span>
