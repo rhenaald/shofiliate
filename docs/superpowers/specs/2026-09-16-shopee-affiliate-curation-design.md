@@ -57,6 +57,7 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 ## 4. Scope
 
 **In scope (MVP):**
+- F0 Auth & otorisasi (login, guard dashboard, peran streamer/admin).
 - F1 Import CSV/JSON format aktual extension + validasi + deduplikasi.
 - F2 Katalog produk + tracker target 300 harian per streamer.
 - F3 Filter Best Seller (total_sales) + filter Trending (velocity sales_30d/growth_30d) dalam **satu page katalog** (bukan page terpisah — revisi R2), berbasis snapshot batch.
@@ -102,6 +103,15 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - Fitur yang ada: `features/auth/` (`schemas.ts`, `components/`, `pages/`), `features/landing/` (`landing-page.tsx`). Route: `app/(auth)/`, `app/dashboard/` (`layout.tsx` pakai `SidebarLayout`, `page.tsx` masih placeholder `Halaman Utama`), `app/api/auth/`, `app/page.tsx`, `app/providers.tsx`.
 
 ## 6. Kebutuhan fungsional
+
+### F0 — Auth & otorisasi (ditambahkan 2026-09-16)
+- Status existing: better-auth terkonfigurasi (`emailAndPassword` min 8 + autoSignIn, plugin `username()`, `admin()`, `nextCookies()`, Prisma adapter); `features/auth/` sudah ada (`schemas.ts`, `components/`, `pages/sign-in-pages.tsx`); rute `app/(auth)/sign-in/` ada. Yang belum: route guard, peran default, enforcement session di fitur products. Tidak ada `middleware.ts` di repo.
+- Login: username atau email + password. Semua tetap di `features/auth/` mengikuti AGENTS.md (tidak ada logika auth di `app/`).
+- Guard: `middleware.ts` melindungi `/dashboard/**` (termasuk `/products`, `/pins`, `/import`) → redirect ke sign-in bila tanpa session.
+- Peran (sistem hanya `user`/`admin`, tanpa role `streamer` eksplisit — koreksi 2026-09-16):
+  - `user` (default saat sign-up; mencakup live streamer): progres 300 milik sendiri, pin shared, koreksi region produk milik sendiri.
+  - `admin` (via admin plugin): koreksi region produk siapa pun (tercatat di audit), lihat progres semua user.
+- Enforcement: semua `data/`/`actions/` products wajib baca session server-side; `addedBy/importedBy/pinnedBy` dari session, tidak dari client. Ini menjawab open question §14.1: ya, admin boleh mengoreksi, tercatat.
 
 ### F1 — Import hasil scraping (CSV/JSON, format aktual)
 - **Sumber:** web extension milik user. Contoh aktual (2 baris, dipersingkat):
@@ -320,6 +330,7 @@ Catatan Context7: pola di atas memakai relasi standar Prisma + index untuk query
 - `app/dashboard/products/pins/page.tsx` → `features/products/pages/pins-page.tsx` — **page pin bersama terpisah** (revisi susulan). Menerima `searchParams { region, q }`, fetch via `data/listPins`.
 - `app/dashboard/products/import/page.tsx` → `features/products/pages/import-page.tsx` (upload + preview 10 baris + hasil).
 - `SidebarLayout` tambah menu: `Products`, `Pins`, `Import`. Tidak ada menu Best Sellers / Trending.
+- Auth: `middleware.ts` (guard `/dashboard/**`), sign-in tetap `features/auth/pages/`. Semua `data/`/`actions/` products membaca session via `lib/auth.ts` (lihat F0).
 - State filter katalog disimpan di URL (shareable, mis. `/dashboard/products?view=trending&region=MY`) — komponen toolbar (client) update via `router.replace`, tabel re-fetch via RSC + TanStack Query cache `staleTime 60s`. Toolbar katalog berisi link "Lihat Pins" menuju page pins (bukan toggle).
 
 **Struktur fitur:**
@@ -382,11 +393,13 @@ features/products/
 - [ ] Filter SG/ID/TH/PH/VN + toggle karantina mengubah tabel katalog yang sama; produk tanpa region muncul di filter karantina.
 - [ ] Pin dari kolom tabel katalog muncul di **page `/dashboard/products/pins`** dengan nama pemin + waktu + note; unpin/edit note dari page pins tercatat; katalog tidak punya toggle "Hanya pin".
 - [ ] Input manual menolak URL non-`/product/{shopId}/{product_id}/` dengan pesan jelas.
+- [ ] `/dashboard/**` tanpa session → redirect sign-in; role default sign-up = user.
+- [ ] Admin bisa koreksi region produk milik user lain (tercatat); user biasa tidak bisa.
 
 ## 13. Fase + Linear breakdown (Hybrid Thin+, siap copy ke Linear)
 
 **Fase:**
-- **MVP (fase 1):** F1–F7 di atas, satu board bersama di page Pins terpisah, formula v1 field aktual, katalog + filter best/trending, tanpa chart.
+- **MVP (fase 1):** F0–F7 di atas, satu board bersama di page Pins terpisah, formula v1 field aktual, katalog + filter best/trending, tanpa chart.
 - **Fase 2:** riwayat harga/GMV per produk, perbandingan region side-by-side, board per live session, threshold trending konfigurabel admin, export shortlist.
 - **Fase 3:** integrasi extension→API langsung, skor opportunity (butuh data komisi), notifikasi progres 300.
 
@@ -396,11 +409,23 @@ features/products/
 - Parent = feature 1–3 hari; Sub = task <4 jam, maks 1 level. Judul `[area] Verb outcome` ≤60 char. Deskripsi hanya header `Goal:/Scope:/Acceptance:/Links:` ≤15 baris. Tepat satu label (`feature|bug|chore|docs|spike`). Attachment hanya parent (sample <30 baris). Komentar: progress/blocker/decision/review.
 
 **Milestone siap buat (JIT, 1 untuk MVP):**
-- `[Phase 1] Katalog + filter kurasi usable` — demo: import 300 baris aktual → katalog terfilter best/trending → page pins bersama → progres 300. Target: akhir cycle berjalan +1.
+- `[Phase 1] Katalog + filter kurasi usable` — demo: login → import 300 baris aktual → katalog terfilter best/trending → page pins bersama → progres 300. Target: akhir cycle berjalan +1.
 
-**Parent issues siap copy (6 parent, masing-masing ≤60 char, label + acceptance):**
+**Parent issues siap copy (7 parent, masing-masing ≤60 char, label + acceptance):**
 
 ```
+[auth] Login, guard + peran user/admin (label: feature)
+Goal: Hanya user login akses dashboard; admin kelola tim.
+Scope:
+- in: sign-in username/email, middleware guard /dashboard/**, role default user, admin via admin plugin, session di actions
+- Out: OAuth, invite email
+Acceptance:
+- [ ] /dashboard tanpa session → redirect sign-in
+- [ ] admin koreksi region siapa pun + tercatat; user biasa hanya milik sendiri
+- [ ] addedBy/importedBy/pinnedBy dari session
+Links: <URL doc ini §6 F0>
+Subs: [auth] login + guard; [auth] roles + session enforcement
+
 [db] Prisma models produk + snapshot (label: feature)
 Goal: Skema Product/Snapshot/Batch/Pin/Target sesuai §8 tersedia via migrate.
 Scope:
@@ -476,7 +501,7 @@ Subs: [products] form+validasi; [products] karantina UI
 
 ## 14. Open questions (tidak memblokir MVP)
 
-1. Apakah admin boleh mengoreksi region produk milik streamer lain? (usulan: ya, tercatat di audit).
+1. Apakah admin boleh mengoreksi region produk milik streamer lain? (diputuskan 2026-09-16: ya — lihat F0, tercatat di audit).
 2. Apakah produk `needsRegion` tetap dihitung ke 300 sebelum dikoreksi? (usulan: tidak, agar kualitas terjaga).
 3. Retensi snapshot: simpan berapa lama? (usulan: 90 hari, lalu agregasi mingguan).
 4. Threshold trending `sales_30d ≥ 10` — perlu konfigurabel admin di fase 1 atau fase 2? (usulan: konstanta fase 1, setting admin fase 2).
@@ -500,3 +525,4 @@ Subs: [products] form+validasi; [products] karantina UI
 - [x] Konsisten: Best/Trending sebagai filter satu page katalog, Pins sebagai page terpisah (§6 F3/F4/F6 = §9 rute = §12 UAT); tidak ada toggle "Hanya pin" di katalog.
 - [x] Scope tunggal: satu fitur kurasi; fase 2/3 dipisah; Linear breakdown 1 level, judul ≤60 char, 4-field header, satu label (§13).
 - [x] Tidak ambigu: contoh 2 baris COSRX dipakai di mapping, formula, model, dan UAT yang sama.
+- [x] Auth tercakup (F0) + 7 parent Linear sinkron §13; relasi blocking & prioritas diatur di Linear (db/auth fondasi → import/katalog → pins/ui/manual).

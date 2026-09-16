@@ -7,6 +7,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  user
+  admin
+}
+
 model User {
   id              String    @id
   name            String
@@ -20,7 +25,7 @@ model User {
   sessions        Session[]
   accounts        Account[]
 
-  role       String?
+  role       Role     @default(user)
   banned     Boolean?  @default(false)
   banReason  String?
   banExpires DateTime?
