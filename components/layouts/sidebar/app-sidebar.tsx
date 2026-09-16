@@ -6,6 +6,7 @@ import { NavMain } from "@/components/layouts/sidebar/nav-main";
 import { NavProjects } from "@/components/layouts/sidebar/nav-projects";
 import { NavSecondary } from "@/components/layouts/sidebar/nav-secondary";
 import { NavUser } from "@/components/layouts/sidebar/nav-user";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/lib/auth-client";
 import {
   Sidebar,
@@ -148,7 +149,7 @@ const data = {
   ],
 };
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -180,6 +181,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               image: session.user.image,
             }}
           />
+        ) : isPending ? (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <div className="flex items-center gap-2 px-2 py-1.5">
+                <Skeleton className="size-8 rounded-full" />
+                <div className="grid flex-1 gap-1">
+                  <Skeleton className="h-3 w-2/3" />
+                  <Skeleton className="h-2.5 w-1/2" />
+                </div>
+              </div>
+            </SidebarMenuItem>
+          </SidebarMenu>
         ) : null}
       </SidebarFooter>
     </Sidebar>
