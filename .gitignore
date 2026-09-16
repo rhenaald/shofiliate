@@ -48,3 +48,4 @@ next-env.d.ts
 .agents
 .claude
 .windsurf
+docs/spec
