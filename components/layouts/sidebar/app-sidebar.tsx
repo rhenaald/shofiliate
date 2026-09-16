@@ -31,6 +31,11 @@ import {
 } from "lucide-react";
 
 const data = {
+  user: {
+    name: "shadcn",
+    email: "m@example.com",
+    avatar: "/avatars/shadcn.jpg",
+  },
   navMain: [
     {
       title: "Playground",
