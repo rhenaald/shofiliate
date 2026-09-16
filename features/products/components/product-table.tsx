@@ -22,7 +22,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
-import { Copy, Pin, Download, ChevronDown } from "lucide-react";
+import { Copy, Pin, Download, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -253,12 +253,76 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
             ) : (
               <TableRow>
                 <TableCell colSpan={productColumns.length} className="h-24 text-center">
-                  No results.
+                  <div className="flex flex-col items-center gap-2 py-6">
+                    <p>No results.</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setQuery("");
+                        setCategory("all");
+                        table.resetSorting();
+                        table.resetColumnFilters();
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">
+          Showing {table.getRowModel().rows.length === 0 ? 0 : page.pageIndex * page.pageSize + 1}–
+          {page.pageIndex * page.pageSize + table.getRowModel().rows.length} of{" "}
+          {table.getFilteredRowModel().rows.length}
+        </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="sm">
+                {page.pageSize} / page
+                <ChevronDown className="size-3.5" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start">
+            <DropdownMenuRadioGroup
+              value={String(page.pageSize)}
+              onValueChange={(v) => table.setPageSize(Number(v))}
+            >
+              {[10, 25, 50, 100].map((s) => (
+                <DropdownMenuRadioItem key={s} value={String(s)}>
+                  {s}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <div className="ml-auto flex items-center gap-1">
+          <span className="mr-2 text-sm text-muted-foreground">
+            Page {page.pageIndex + 1} of {table.getPageCount()}
+          </span>
+          <Button variant="outline" size="icon" className="size-8" onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>
+            <ChevronsLeft className="size-4" />
+            <span className="sr-only">First page</span>
+          </Button>
+          <Button variant="outline" size="icon" className="size-8" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+            <ChevronLeft className="size-4" />
+            <span className="sr-only">Previous page</span>
+          </Button>
+          <Button variant="outline" size="icon" className="size-8" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            <ChevronRight className="size-4" />
+            <span className="sr-only">Next page</span>
+          </Button>
+          <Button variant="outline" size="icon" className="size-8" onClick={() => table.setPageIndex(table.getPageCount() - 1)} disabled={!table.getCanNextPage()}>
+            <ChevronsRight className="size-4" />
+            <span className="sr-only">Last page</span>
+          </Button>
+        </div>
       </div>
     </div>
   );
