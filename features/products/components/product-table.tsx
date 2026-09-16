@@ -22,9 +22,24 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
+import { Copy, Pin, Download, ChevronDown } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { productColumns } from "@/features/products/components/product-columns";
+import { toast } from "@/components/ui/toast";
+import { productColumns, SORTABLE_COLUMNS } from "@/features/products/components/product-columns";
 import type { ProductRow } from "@/features/products/types";
 
 const features = tableFeatures({
@@ -43,8 +58,6 @@ const features = tableFeatures({
 export function ProductTable({ data, isLoading = false }: { data: ProductRow[]; isLoading?: boolean }) {
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("all");
-  void setQuery;
-  void setCategory;
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({});
@@ -77,11 +90,116 @@ export function ProductTable({ data, isLoading = false }: { data: ProductRow[]; 
     state: { sorting, columnFilters, columnVisibility, rowSelection, pagination },
   });
   const page = table.atoms.pagination.get();
-  void categories;
-  void page;
+const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" : "asc"}` : "none";
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+        <span className="text-sm text-muted-foreground">{selectedCount} selected</span>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={selectedCount === 0} onClick={() => toast.add({ title: "Pin — coming in SH-9" })}>
+            <Pin className="size-3.5" />
+            Pin
+          </Button>
+          <Button variant="outline" size="sm" disabled={selectedCount === 0} onClick={() => toast.add({ title: "Copy link — coming in SH-6" })}>
+            <Copy className="size-3.5" />
+            Copy link
+          </Button>
+          <Button variant="outline" size="sm" disabled={selectedCount === 0} onClick={() => toast.add({ title: "Export — coming in SH-6" })}>
+            <Download className="size-3.5" />
+            Export
+          </Button>
+          <Button variant="ghost" size="sm" disabled={selectedCount === 0} onClick={() => table.resetRowSelection()}>
+            Clear
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Search product or shop..."
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            table.setPageIndex(0);
+          }}
+          className="max-w-xs"
+        />
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  Category: {category === "all" ? "All" : category}
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="max-h-64">
+              <DropdownMenuRadioGroup
+                value={category}
+                onValueChange={(v) => {
+                  setCategory(v);
+                  table.setPageIndex(0);
+                }}
+              >
+                <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                {categories.map((c) => (
+                  <DropdownMenuRadioItem key={c} value={c}>
+                    {c}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  Sort: {sortValue === "none" ? "Default" : sortValue}
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => table.resetSorting()}>Default</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {SORTABLE_COLUMNS.flatMap((c) => [
+                <DropdownMenuItem key={`${c.id}-asc`} onClick={() => table.getColumn(c.id)?.toggleSorting(false)}>
+                  {c.label} ↑
+                </DropdownMenuItem>,
+                <DropdownMenuItem key={`${c.id}-desc`} onClick={() => table.getColumn(c.id)?.toggleSorting(true)}>
+                  {c.label} ↓
+                </DropdownMenuItem>,
+              ])}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  Columns
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="max-h-64">
+              {table
+                .getAllColumns()
+                .filter((col) => col.getCanHide())
+                .map((col) => (
+                  <DropdownMenuCheckboxItem
+                    key={col.id}
+                    checked={col.getIsVisible()}
+                    onCheckedChange={(v) => col.toggleVisibility(!!v)}
+                  >
+                    {col.id}
+                  </DropdownMenuCheckboxItem>
+                ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
       <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
