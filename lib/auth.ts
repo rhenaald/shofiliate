@@ -17,7 +17,11 @@ export const auth = betterAuth({
     minPasswordLength: 8,
     autoSignIn: true,
   },
-  plugins: [username(), adminPlugin(), nextCookies()],
+  plugins: [
+    username(),
+    adminPlugin({ defaultRole: "user", adminRoles: ["admin"] }),
+    nextCookies(),
+  ],
   trustedOrigins: [process.env.BETTER_AUTH_URL ?? "http://localhost:3000"],
 });
 
