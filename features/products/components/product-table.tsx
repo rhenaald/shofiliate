@@ -277,7 +277,7 @@ const sortValue = sorting.length ? `${sorting[0].id}:${sorting[0].desc ? "desc" 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">
           Showing {table.getRowModel().rows.length === 0 ? 0 : page.pageIndex * page.pageSize + 1}–
-          {page.pageIndex * page.pageSize + table.getRowModel().rows.length} of{" "}
+          {table.getRowModel().rows.length === 0 ? 0 : page.pageIndex * page.pageSize + table.getRowModel().rows.length} of{" "}
           {table.getFilteredRowModel().rows.length}
         </span>
         <DropdownMenu>
