@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
@@ -159,18 +160,19 @@ function goJump() {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-xs">
-          <Input
+        <InputGroup className="max-w-xs">
+          <InputGroupInput
             placeholder="Search product or shop..."
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               table.setPageIndex(0);
             }}
-            className="pr-9"
           />
-          <Search className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        </div>
+          <InputGroupAddon align="inline-end">
+            <Search className="size-4" />
+          </InputGroupAddon>
+        </InputGroup>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
