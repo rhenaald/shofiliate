@@ -18,7 +18,6 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import {
-  TerminalSquareIcon,
   BotIcon,
   BookOpenIcon,
   Settings2Icon,
@@ -28,6 +27,8 @@ import {
   PieChartIcon,
   MapIcon,
   TerminalIcon,
+  PackageIcon,
+  UploadCloudIcon,
 } from "lucide-react";
 
 const data = {
@@ -38,25 +39,28 @@ const data = {
   },
   navMain: [
     {
-      title: "Playground",
-      url: "#",
-      icon: <TerminalSquareIcon />,
+      title: "Products",
+      url: "/dashboard/products",
+      icon: <PackageIcon />,
       isActive: true,
       items: [
         {
-          title: "History",
-          url: "#",
+          title: "Katalog",
+          url: "/dashboard/products",
         },
         {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
+          title: "Pins",
+          url: "/dashboard/products/pins",
         },
       ],
     },
+    {
+      title: "Import",
+      url: "/dashboard/products/import",
+      icon: <UploadCloudIcon />,
+      isActive: false,
+    },
+
     {
       title: "Models",
       url: "#",
