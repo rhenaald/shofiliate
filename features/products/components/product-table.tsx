@@ -22,26 +22,24 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
-import { Copy, Pin, Download, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Search } from "lucide-react";
+import { Copy, Pin, Download, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
-import { productColumns, SORTABLE_COLUMNS } from "@/features/products/components/product-columns";
-import type { ProductRow } from "@/features/products/types";
+import { createProductColumns } from "@/features/products/components/product-columns";
+import type { CatalogRow, CatalogView } from "@/features/products/types";
+import type { CatalogSortId } from "@/features/products/schemas";
 
 const features = tableFeatures({
   columnFilteringFeature,
@@ -50,71 +48,85 @@ const features = tableFeatures({
   rowSelectionFeature,
   rowSortingFeature,
   filteredRowModel: createFilteredRowModel(),
+  // Wajib ada untuk tipe useTable; tidak memotong baris saat manualPagination aktif.
   paginatedRowModel: createPaginatedRowModel(),
   sortedRowModel: createSortedRowModel(),
   filterFns: { includesString: filterFn_includesString },
   sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
 });
 
-export function ProductTable({ data, isLoading = false }: { data: ProductRow[]; isLoading?: boolean }) {
-  const [query, setQuery] = React.useState("");
-  const [category, setCategory] = React.useState("all");
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+interface ProductTableProps {
+  data: CatalogRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  view: CatalogView;
+  sortId: CatalogSortId | null;
+  sortDir: "asc" | "desc";
+  onSortChange: (columnId: string) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onClearFilters: () => void;
+  isLoading?: boolean;
+}
+
+export function ProductTable({
+  data,
+  total,
+  page,
+  pageSize,
+  view,
+  sortId,
+  sortDir,
+  onSortChange,
+  onPageChange,
+  onPageSizeChange,
+  onClearFilters,
+  isLoading = false,
+}: ProductTableProps) {
+  const columns = React.useMemo(
+    () => createProductColumns(view, { sortId, sortDir, onSort: onSortChange }),
+    [view, sortId, sortDir, onSortChange],
+  );
+  // Urutan baris adalah otoritas server (sort per view, SH-17).
+  // Sorting interaktif dimatikan sementara agar tidak menyesatkan (hanya 1 halaman terlihat).
+  const [sorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
-  const [pagination, setPagination] = React.useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
-
-  const categories = React.useMemo(
-    () => Array.from(new Set(data.map((d) => d.category))).filter((c) => c !== "-").sort(),
-    [data],
-  );
-
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return data.filter((d) => {
-      if (category !== "all" && d.category !== category) return false;
-      if (!q) return true;
-      return d.productName.toLowerCase().includes(q) || d.shopName.toLowerCase().includes(q);
-    });
-  }, [data, query, category]);
 
   const table = useTable({
     features,
-    data: filtered,
-    columns: productColumns,
-    onSortingChange: setSorting,
+    data,
+    columns,
+    manualPagination: true,
+    rowCount: total,
+    autoResetPageIndex: false,
+    onSortingChange: () => {},
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    onPaginationChange: setPagination,
-    state: { sorting, columnFilters, columnVisibility, rowSelection, pagination },
+    onPaginationChange: (updater) => {
+      const current: PaginationState = { pageIndex: page - 1, pageSize };
+      const next = typeof updater === "function" ? updater(current) : updater;
+      if (next.pageSize !== pageSize) {
+        onPageSizeChange(next.pageSize);
+      } else if (next.pageIndex + 1 !== page) {
+        onPageChange(next.pageIndex + 1);
+      }
+    },
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      rowSelection,
+      pagination: { pageIndex: page - 1, pageSize },
+    },
   });
-  const page = table.atoms.pagination.get();
-const selectedCount = table.getFilteredSelectedRowModel().rows.length;
-const activeSort = sorting[0];
-const sortValue = activeSort
-  ? `${SORTABLE_COLUMNS.find((c) => c.id === activeSort.id)?.label ?? activeSort.id} (${activeSort.desc ? "Desc" : "Asc"})`
-  : "Default";
-const [sortDir, setSortDir] = React.useState<"asc" | "desc">("asc");
+  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
 const [jumpKey, setJumpKey] = React.useState<number | null>(null);
 const [jumpValue, setJumpValue] = React.useState("");
 const pageCount = table.getPageCount();
-
-function applySort(columnId: string) {
-  const current = sorting.find((s) => s.id === columnId);
-  if (current && (current.desc ? "desc" : "asc") === sortDir) {
-    table.resetSorting();
-  } else {
-    table.getColumn(columnId)?.toggleSorting(sortDir === "desc");
-  }
-}
-
-function applySortDir(dir: "asc" | "desc") {
-  setSortDir(dir);
-  const current = sorting[0];
-  if (current) table.getColumn(current.id)?.toggleSorting(dir === "desc");
-}
 
 function pageItems(current: number, total: number): (number | "ellipsis")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i);
@@ -160,68 +172,7 @@ function goJump() {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <InputGroup className="max-w-xs">
-          <InputGroupInput
-            placeholder="Search product or shop..."
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              table.setPageIndex(0);
-            }}
-          />
-          <InputGroupAddon align="inline-end">
-            <Search className="size-4" />
-          </InputGroupAddon>
-        </InputGroup>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm" className="max-w-72">
-                  <span className="min-w-0 truncate">Category: {category === "all" ? "All" : category}</span>
-                  <ChevronDown className="size-3.5 shrink-0" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="max-h-64 w-72">
-              <DropdownMenuRadioGroup
-                value={category}
-                onValueChange={(v) => {
-                  setCategory(v);
-                  table.setPageIndex(0);
-                }}
-              >
-                <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                {categories.map((c) => (
-                  <DropdownMenuRadioItem key={c} value={c}>
-                    {c}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm" className="max-w-64">
-                  <span className="min-w-0 truncate">Sort: {sortValue}</span>
-                  <ChevronDown className="size-3.5 shrink-0" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuRadioGroup value={sortDir} onValueChange={(v) => applySortDir(v as "asc" | "desc")}>
-                <DropdownMenuRadioItem value="asc">Ascending ↑</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="desc">Descending ↓</DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-              <DropdownMenuSeparator />
-              {SORTABLE_COLUMNS.map((c) => (
-                <DropdownMenuItem key={c.id} onClick={() => applySort(c.id)}>
-                  {c.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -268,7 +219,7 @@ function goJump() {
             {isLoading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <TableRow key={`skeleton-${i}`}>
-                  <TableCell colSpan={productColumns.length}>
+                  <TableCell colSpan={columns.length}>
                     <Skeleton className="h-8 w-full" />
                   </TableCell>
                 </TableRow>
@@ -288,17 +239,15 @@ function goJump() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={productColumns.length} className="h-24 text-center">
+                <TableCell colSpan={columns.length} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2 py-6">
                     <p>No results.</p>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setQuery("");
-                        setCategory("all");
-                        table.resetSorting();
                         table.resetColumnFilters();
+                        onClearFilters();
                       }}
                     >
                       Clear filters
@@ -312,22 +261,22 @@ function goJump() {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length === 0 ? 0 : page.pageIndex * page.pageSize + 1}–
-          {table.getRowModel().rows.length === 0 ? 0 : page.pageIndex * page.pageSize + table.getRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length}
+          Showing {table.getRowModel().rows.length === 0 ? 0 : (page - 1) * pageSize + 1}–
+          {(page - 1) * pageSize + table.getRowModel().rows.length} of{" "}
+          {total}
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button variant="outline" size="sm">
-                {page.pageSize} / page
+                {pageSize} / page
                 <ChevronDown className="size-3.5" />
               </Button>
             }
           />
           <DropdownMenuContent align="start">
             <DropdownMenuRadioGroup
-              value={String(page.pageSize)}
+              value={String(pageSize)}
               onValueChange={(v) => table.setPageSize(Number(v))}
             >
               {[10, 25, 50, 100].map((s) => (
@@ -347,7 +296,7 @@ function goJump() {
             <ChevronLeft className="size-4" />
             <span className="sr-only">Previous page</span>
           </Button>
-          {pageItems(page.pageIndex, pageCount).map((item, i) =>
+          {pageItems(page - 1, pageCount).map((item, i) =>
             item === "ellipsis" ? (
               jumpKey === i ? (
                 <span key={`jump-${i}`} className="flex items-center gap-1">
@@ -384,7 +333,7 @@ function goJump() {
             ) : (
               <Button
                 key={item}
-                variant={item === page.pageIndex ? "default" : "outline"}
+                variant={item === page - 1 ? "default" : "outline"}
                 size="icon"
                 className="size-8"
                 onClick={() => table.setPageIndex(item)}
