@@ -64,11 +64,12 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - F4 Filter & evaluasi per region (MY, SG, ID, TH, PH, VN).
 - F5 Pin/favorit shared tim sebagai **page berbeda** (`/dashboard/products/pins` — revisi susulan), aksi pin/unpin dari tabel katalog.
 - F6 Input manual single product + edit koreksi (khususnya region & atribut wajib).
+- F7 Komisi affiliate 4 kanal (Xtra %, Live, Sosmed, Video nominal) & aksi affiliate link (copy + buka) pada katalog.
 
 **Out of scope (ditunda):**
 - Integrasi langsung extension → API (push otomatis); MVP hanya upload file.
 - Auto-scrape server-side / scheduler scraping Shopee (risiko ToS + butuh proxy per negara).
-- Data komisi affiliate, link affiliasi shortlink, laporan konversi.
+- Laporan konversi detail, sub-ID custom tracking per sesi live.
 - Deteksi kompetisi antar-affiliate (Shopee Open API tidak mengekspos field ini — temuan Exa).
 - Multi-bahasa UI, aplikasi mobile, notifikasi real-time.
 
@@ -346,18 +347,19 @@ features/products/
 
 **Tampilan tabel (revisi R3 — TanStack Table v9 + shadcn, perjelas):**
 - Reuse `components/data-table.tsx` generik (`tableFeatures`, `useTable`, `FlexRender`) untuk **kedua page**; definisi kolom: `features/products/components/product-columns.tsx` (katalog) dan `pin-columns.tsx` (pins: kolom katalog inti + `note` + `pinnedBy` + `pinnedAt`, tanpa kolom pin-aksi melainkan unpin). Jangan fork DataTable.
-- Kolom MVP (sesuai field aktual, berurutan):
-  1. `pin` (aksi icon, non-sortable) — pin/unpin optimistic.
-  2. `product_name` (link ke `product_url`, 2-line clamp + sub `seller_name` kecil) — sortable text, global filter.
-  3. `region` (Badge shadcn, default MY) — filter dropdown.
-  4. `category` (truncate, tooltip full) — filter text.
-  5. `likes` (numeric right-align) — sortable.
-  6. `sales_30d` (numeric, highlight saat `view=trending`) — sortable.
-  7. `growth_30d` (Badge: hijau `+`, merah `-`, muted `"-"`) — sortable.
-  8. `total_sales` (numeric bold saat `view=best`) — sortable, default sort saat `view=best`.
-  9. `gmv_30d` (amount + simbol asli `RM`, right-align) — sortable.
-  10. `listed_on` (date `YYYY-MM-DD`) — sortable.
-  11. `actions` (dropdown: Lihat di Shopee, Pin, Koreksi region).
+- Kolom Katalog (revisi 2026-09-18, urutan kiri ke kanan):
+  1. `select` (checkbox baris, sticky-left).
+  2. `product_name` & `seller_name` (link ke `product_url`, 2-line clamp nama produk + seller_name kecil di bawahnya) — sortable text, left-align.
+  3. `category` (text wrap, left-align).
+  4. `komisiXtra` (Xtra (%)) — right-align numeric.
+  5. `commissionLive` (Live nominal currency) — right-align numeric.
+  6. `commissionSocial` (Sosmed nominal currency) — right-align numeric.
+  7. `commissionVideo` (Video nominal currency) — right-align numeric.
+  8. `total_sales` / `Sold` (total sales all-time) — right-align numeric, sortable, default sort saat `view=best`.
+  9. `affiliate` (ButtonGroup icon-only: Salin link & Buka link dengan Tooltip; disabled jika link kosong) — non-sortable.
+  10. `actions` (dropdown: Lihat di Shopee, Pin, Koreksi region).
+- Kolom bawaan tersembunyi (default hidden, dapat dimunculkan via dropdown Columns):
+  `pin`, `region`, `likes`, `sales_30d` (highlight saat `view=trending`), `growth_30d`, `gmv_30d`, `listed_on`.
 - Toolbar katalog (shadcn): `Input` search (nama/seller, pakai `filterColumn` DataTable untuk client-filter + `q` server untuk dataset besar), `Select` region (default MY), segmented `Semua|Best Seller|Trending`, toggle `Perlu region`, tombol `Lihat Pins` (link ke `/dashboard/products/pins`) + `Import` + `Input manual`. Tidak ada toggle "Hanya pin" di katalog — pin dilihat di page Pins.
 - Page Pins toolbar: `Input` search + `Select` region + info board ("Team Board, N pin aktif") + tombol kembali ke katalog.
 - Header atas tabel katalog: `progress-card` (`X/300` + sisa) kiri, stempel batch kanan (`Data per: YYYY-MM-DD HH:mm batch #id` + `Lihat metodologi` via Tooltip). Page Pins tidak menampilkan progress 300 (fokus kurasi live).

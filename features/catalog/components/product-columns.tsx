@@ -1,7 +1,7 @@
 "use client";
 
 import { sortFn_alphanumeric, sortFn_text, type ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Pin } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, ExternalLink, Pin } from "lucide-react";
 
 import type { DataTableFeatures } from "@/components/data-table";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/components/shared/data-table/columns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { toast } from "@/components/ui/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CatalogRow, CatalogView } from "@/features/catalog/types";
@@ -30,31 +31,22 @@ interface SortHeaderProps {
   label: string;
   active: "asc" | "desc" | null;
   onToggle: () => void;
+  align?: "left" | "right";
 }
 
-function SortHeader({ label, active, onToggle }: SortHeaderProps) {
+function SortHeader({ label, active, onToggle, align = "left" }: SortHeaderProps) {
   const Icon = active === "asc" ? ArrowUp : active === "desc" ? ArrowDown : ArrowUpDown;
   return (
     <Button
       variant="ghost"
       size="sm"
-      className="-ml-2 h-8"
+      className={align === "right" ? "-mr-2 ml-auto flex h-8" : "-ml-2 h-8"}
       onClick={onToggle}
       aria-label={`Urutkan ${label}${active ? ` (${active})` : ""}`}
     >
       {label}
       <Icon className="size-3.5" />
     </Button>
-  );
-}
-
-function Clipped({ text, lines = 2 }: { text: string; lines?: 1 | 2 }) {
-  const cls = lines === 2 ? "line-clamp-2 max-w-56 whitespace-normal" : "block max-w-44 truncate";
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className={cls}>{text}</span>} />
-      <TooltipContent className="max-w-80">{text}</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -77,43 +69,27 @@ export interface ProductColumnSort {
   onSort: (columnId: string) => void;
 }
 
-/** 11 kolom §9. Dibuat via factory agar highlight mengikuti view aktif.
- *  Klik header sort server via URL (opts.onSort) — bukan sort lokal.
- *  Kolom pin/aksi ditegakkan di service SH-22 — di sini placeholder. */
 export function createProductColumns(
   view: CatalogView,
   opts: ProductColumnSort,
 ): ColumnDef<DataTableFeatures, CatalogRow>[] {
-  const header = (columnId: string, label: string) => ({
+  const header = (columnId: string, label: string, align: "left" | "right" = "left") => ({
     header: () => (
       <SortHeader
         label={label}
         active={opts.sortId === COLUMN_SORT_ID[columnId] ? opts.sortDir : null}
         onToggle={() => opts.onSort(columnId)}
+        align={align}
       />
     ),
   });
+
   return [
     withSelectColumn<CatalogRow>(),
     {
-      id: "pin",
-      header: () => <span className="sr-only">Pin</span>,
-      enableSorting: false,
-      cell: () => (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Pin produk"
-          onClick={() => toast.add({ title: "Pin — coming in SH-9" })}
-        >
-          <Pin className="size-3.5" />
-        </Button>
-      ),
-    },
-    {
       id: "productName",
       accessorKey: "name",
-      ...header("productName", "Product Name"),
+      ...header("productName", "Product Name", "left"),
       cell: ({ row }) => (
         <div className="min-w-0">
           <a
@@ -132,6 +108,174 @@ export function createProductColumns(
       sortFn: sortFn_text,
     },
     {
+      id: "category",
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => (
+        <span className="block max-w-52 whitespace-normal break-words leading-snug">
+          {row.original.category}
+        </span>
+      ),
+      sortFn: sortFn_text,
+    },
+    {
+      id: "komisiXtra",
+      accessorKey: "komisiXtraRate",
+      header: () => <div className="text-right">Xtra (%)</div>,
+      cell: ({ row }) => {
+        const val = row.original.komisiXtraRate;
+        return (
+          <span className="block text-right tabular-nums">
+            {val !== null && val !== undefined && val > 0 ? `${val}%` : "-"}
+          </span>
+        );
+      },
+      sortFn: sortFn_alphanumeric,
+    },
+    {
+      id: "commissionLive",
+      accessorKey: "commissionLiveAmount",
+      header: () => <div className="text-right">Live</div>,
+      cell: ({ row }) => {
+        const val = row.original.commissionLiveAmount;
+        return (
+          <span className="block text-right whitespace-nowrap tabular-nums">
+            {val !== null && val !== undefined && val > 0
+              ? formatMoney(val, row.original.currency)
+              : "-"}
+          </span>
+        );
+      },
+      sortFn: sortFn_alphanumeric,
+    },
+    {
+      id: "commissionSocial",
+      accessorKey: "commissionSocialAmount",
+      header: () => <div className="text-right">Sosmed</div>,
+      cell: ({ row }) => {
+        const val = row.original.commissionSocialAmount;
+        return (
+          <span className="block text-right whitespace-nowrap tabular-nums">
+            {val !== null && val !== undefined && val > 0
+              ? formatMoney(val, row.original.currency)
+              : "-"}
+          </span>
+        );
+      },
+      sortFn: sortFn_alphanumeric,
+    },
+    {
+      id: "commissionVideo",
+      accessorKey: "commissionVideoAmount",
+      header: () => <div className="text-right">Video</div>,
+      cell: ({ row }) => {
+        const val = row.original.commissionVideoAmount;
+        return (
+          <span className="block text-right whitespace-nowrap tabular-nums">
+            {val !== null && val !== undefined && val > 0
+              ? formatMoney(val, row.original.currency)
+              : "-"}
+          </span>
+        );
+      },
+      sortFn: sortFn_alphanumeric,
+    },
+    {
+      id: "totalSales",
+      accessorKey: "totalSales",
+      ...header("totalSales", "Sold", "right"),
+      cell: ({ row }) => (
+        <span
+          className={
+            view === "best"
+              ? "block text-right font-bold tabular-nums"
+              : "block text-right font-semibold tabular-nums"
+          }
+        >
+          {row.original.totalSales.toLocaleString("en-US")}
+        </span>
+      ),
+      sortFn: sortFn_alphanumeric,
+    },
+    {
+      id: "affiliate",
+      header: "Affiliate",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const url = row.original.affiliateUrl;
+        const hasUrl = !!url && url.trim().length > 0;
+
+        return (
+          <ButtonGroup className="gap-1">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="inline-flex">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      disabled={!hasUrl}
+                      aria-label="Salin link affiliate"
+                      onClick={() => {
+                        if (!hasUrl) return;
+                        navigator.clipboard.writeText(url);
+                        toast.add({ title: "Link affiliate disalin" });
+                      }}
+                    >
+                      <Copy className="size-3.5" />
+                    </Button>
+                  </span>
+                }
+              />
+              <TooltipContent>
+                {hasUrl ? "Salin link affiliate" : "Belum ada link affiliate"}
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="inline-flex">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      disabled={!hasUrl}
+                      aria-label="Buka link affiliate"
+                      onClick={() => {
+                        if (!hasUrl) return;
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                    >
+                      <ExternalLink className="size-3.5" />
+                    </Button>
+                  </span>
+                }
+              />
+              <TooltipContent>
+                {hasUrl ? "Buka link affiliate" : "Belum ada link affiliate"}
+              </TooltipContent>
+            </Tooltip>
+          </ButtonGroup>
+        );
+      },
+    },
+    // ---- PRD columns (hidden by default via table initial columnVisibility) ----
+    {
+      id: "pin",
+      header: () => <span className="sr-only">Pin</span>,
+      enableSorting: false,
+      cell: () => (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Pin produk"
+          onClick={() => toast.add({ title: "Pin — coming in SH-9" })}
+        >
+          <Pin className="size-3.5" />
+        </Button>
+      ),
+    },
+    {
       id: "region",
       accessorKey: "region",
       header: "Region",
@@ -139,16 +283,9 @@ export function createProductColumns(
       cell: ({ row }) => <Badge variant="secondary">{row.original.region}</Badge>,
     },
     {
-      id: "category",
-      accessorKey: "category",
-      header: "Category",
-      cell: ({ row }) => <Clipped text={row.original.category} lines={1} />,
-      sortFn: sortFn_text,
-    },
-    {
       id: "likes",
       accessorKey: "likes",
-      ...header("likes", "Likes"),
+      ...header("likes", "Likes", "right"),
       cell: ({ row }) => (
         <span className="block text-right tabular-nums">
           {row.original.likes.toLocaleString("en-US")}
@@ -159,7 +296,7 @@ export function createProductColumns(
     {
       id: "sales30d",
       accessorKey: "sales30d",
-      ...header("sales30d", "Sales 30d"),
+      ...header("sales30d", "Sales 30d", "right"),
       cell: ({ row }) => (
         <span
           className={
@@ -176,38 +313,23 @@ export function createProductColumns(
     {
       id: "growth30d",
       accessorKey: "growth30d",
-      ...header("growth30d", "Growth 30d"),
+      ...header("growth30d", "Growth 30d", "right"),
       cell: ({ row }) => {
         const g = row.original.growth30d;
         return (
-          <Badge variant={g > 0 ? "success" : g < 0 ? "destructive" : "secondary"}>
-            {formatGrowth(g)}
-          </Badge>
+          <div className="flex justify-end">
+            <Badge variant={g > 0 ? "success" : g < 0 ? "destructive" : "secondary"}>
+              {formatGrowth(g)}
+            </Badge>
+          </div>
         );
       },
       sortFn: sortFn_alphanumeric,
     },
     {
-      id: "totalSales",
-      accessorKey: "totalSales",
-      ...header("totalSales", "Total Sales"),
-      cell: ({ row }) => (
-        <span
-          className={
-            view === "best"
-              ? "block text-right font-bold tabular-nums"
-              : "block text-right font-semibold tabular-nums"
-          }
-        >
-          {row.original.totalSales.toLocaleString("en-US")}
-        </span>
-      ),
-      sortFn: sortFn_alphanumeric,
-    },
-    {
       id: "gmv30d",
       accessorKey: "gmv30d",
-      ...header("gmv30d", "GMV 30d"),
+      ...header("gmv30d", "GMV 30d", "right"),
       cell: ({ row }) => (
         <span className="block text-right whitespace-nowrap tabular-nums">
           {formatMoney(row.original.gmv30d, row.original.currency)}
@@ -218,7 +340,7 @@ export function createProductColumns(
     {
       id: "listedOn",
       accessorKey: "listedOn",
-      ...header("listedOn", "Listed On"),
+      ...header("listedOn", "Listed On", "left"),
       cell: ({ row }) => (
         <span className="block whitespace-nowrap tabular-nums">
           {row.original.listedOn ?? "-"}
@@ -254,10 +376,10 @@ export function createProductColumns(
 
 export const SORTABLE_COLUMNS = [
   { id: "productName", label: "Product Name" },
+  { id: "totalSales", label: "Sold" },
   { id: "likes", label: "Likes" },
   { id: "sales30d", label: "Sales 30d" },
   { id: "growth30d", label: "Growth 30d" },
-  { id: "totalSales", label: "Total Sales" },
   { id: "gmv30d", label: "GMV 30d" },
   { id: "listedOn", label: "Listed On" },
 ] as const;

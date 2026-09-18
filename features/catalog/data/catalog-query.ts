@@ -41,6 +41,11 @@ export interface CatalogSqlRow {
   shopName: string;
   category: string;
   listedOn: Date | null;
+  affiliateUrl: string | null;
+  komisiXtraRate: number | null;
+  commissionLiveAmount: string | null;
+  commissionSocialAmount: string | null;
+  commissionVideoAmount: string | null;
 }
 
 // D-01: trending = sales30d >= 10 (bukan null-check, konsekuensi "-"→0 di SH-5).
@@ -89,7 +94,12 @@ function latestSnapshotQuery(f: ResolvedCatalogFilters): Prisma.Sql {
       p."id" AS "pid",
       p."region"::text AS "region",
       p."itemId", p."shopId", p."name", p."url",
-      p."currency", p."shopName", p."category", p."listedOn"
+      p."currency", p."shopName", p."category", p."listedOn",
+      p."affiliateUrl",
+      COALESCE(s."komisiXtraRate", p."komisiXtraRate") AS "komisiXtraRate",
+      COALESCE(s."commissionLiveAmount", p."commissionLiveAmount")::text AS "commissionLiveAmount",
+      COALESCE(s."commissionSocialAmount", p."commissionSocialAmount")::text AS "commissionSocialAmount",
+      COALESCE(s."commissionVideoAmount", p."commissionVideoAmount")::text AS "commissionVideoAmount"
     FROM "ProductSnapshot" s
     JOIN "Product" p ON p."id" = s."productId"
     WHERE p."region" = CAST(${f.region} AS "Region")
@@ -144,5 +154,10 @@ export function toDTO(r: CatalogSqlRow): CatalogProductDTO {
     likedCount: r.likedCount,
     scrapedAt: r.scrapedAt.toISOString(),
     batchId: r.batchId,
+    affiliateUrl: r.affiliateUrl,
+    komisiXtraRate: r.komisiXtraRate,
+    commissionLiveAmount: r.commissionLiveAmount ? Number(r.commissionLiveAmount) : null,
+    commissionSocialAmount: r.commissionSocialAmount ? Number(r.commissionSocialAmount) : null,
+    commissionVideoAmount: r.commissionVideoAmount ? Number(r.commissionVideoAmount) : null,
   };
 }

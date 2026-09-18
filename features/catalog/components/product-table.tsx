@@ -100,7 +100,15 @@ export function ProductTable({
   // Sorting interaktif lokal dimatikan agar tidak menyesatkan (hanya 1 halaman terlihat).
   const [sorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({
+    pin: false,
+    region: false,
+    likes: false,
+    sales30d: false,
+    growth30d: false,
+    gmv30d: false,
+    listedOn: false,
+  });
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
   const table = useTable({
