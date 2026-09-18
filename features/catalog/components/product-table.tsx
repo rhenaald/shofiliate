@@ -233,6 +233,7 @@ export function ProductTable({
           onSelectDirection={onSelectDirection}
           onClearSort={onClearSort}
         />
+      </div>
       {/* FIXME: Table container x-overflow not fully contained within layout bounds. Investigate and constrain horizontal overflow properly. */}
       <ScrollArea className="w-full rounded-md border">
         <Table

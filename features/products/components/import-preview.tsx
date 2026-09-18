@@ -22,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCompanionExtension } from "@/features/products/hooks/use-companion-extension";
-import type { RawImportRow } from "@/features/products/types";
+import type { RawImportRow, RegionCode } from "@/features/products/types";
 
 interface ImportPreviewProps {
   fileName: string;
@@ -60,9 +60,17 @@ export function ImportPreview({
 
   const handleEnrichNow = async () => {
     try {
-      // Deteksi region dari data URL produk (default ke ID jika tidak ada)
-      const hasMy = rows.some((r) => String(r.product_url || r.url || "").includes(".com.my"));
-      const targetRegion = hasMy ? "MY" : "ID";
+      // Deteksi region dari data URL produk (default ke MY jika tidak ada)
+      let targetRegion: RegionCode = "MY";
+      for (const r of rows) {
+        const url = String(r.product_url || r.url || "").toLowerCase();
+        if (url.includes(".com.my")) { targetRegion = "MY"; break; }
+        if (url.includes(".sg")) { targetRegion = "SG"; break; }
+        if (url.includes(".co.id")) { targetRegion = "ID"; break; }
+        if (url.includes(".co.th")) { targetRegion = "TH"; break; }
+        if (url.includes(".ph")) { targetRegion = "PH"; break; }
+        if (url.includes(".vn")) { targetRegion = "VN"; break; }
+      }
       const result = await enrichRows(rows, targetRegion);
       setRows(result);
     } catch (err) {
