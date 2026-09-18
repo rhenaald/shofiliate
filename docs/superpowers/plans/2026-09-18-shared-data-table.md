@@ -44,7 +44,7 @@
 ```tsx
 "use client";
 
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, RowData } from "@tanstack/react-table";
 import { MoreHorizontal, type LucideIcon } from "lucide-react";
 
 import type { DataTableFeatures } from "@/components/data-table";
@@ -64,7 +64,7 @@ export interface RowAction {
   onSelect: () => void;
 }
 
-export function withSelectColumn<T>(): ColumnDef<DataTableFeatures, T> {
+export function withSelectColumn<T extends RowData>(): ColumnDef<DataTableFeatures, T> {
   return {
     id: "select",
     enableSorting: false,
@@ -99,7 +99,7 @@ export function withSelectColumn<T>(): ColumnDef<DataTableFeatures, T> {
   };
 }
 
-export function withActionColumn<T>(options: {
+export function withActionColumn<T extends RowData>(options: {
   id?: string;
   header?: string;
   getItems: (data: T) => RowAction[];
