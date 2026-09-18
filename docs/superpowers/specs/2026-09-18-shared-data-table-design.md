@@ -36,28 +36,28 @@
 
 ### 4.2 `withActionColumn<T>({ id, header, getItems })`
 
-- Input: `getItems: (row: T) => RowAction[]`, optional `id` (default `"actions"`), optional header label (default `"Actions"`).
+- Input: `getItems: (data: T) => RowAction[]` (receives `row.original`), optional `id` (default `"actions"`), optional header label (default `"Actions"`).
 - `RowAction = { id: string; label: string; icon?: LucideIcon; disabled?: boolean; onSelect: () => void }`.
 - Cell: ghost icon button (`MoreHorizontal`, `size="icon-sm"`, aria-label `"Aksi baris"`) + dropdown of `DropdownMenuItem` per action (icon + label, disabled passthrough).
 - Fixed config: `enableSorting: false`, `enableHiding: false`.
 - Empty list: trigger button hidden (no dropdown for rows without actions).
 - Catalog mapping: Lihat di Shopee (`window.open(row.url, "_blank", "noopener,noreferrer")`), Pin toast `"Pin — coming in SH-9"`, Koreksi region toast `"Koreksi region — coming in SH-8"`.
 
-### 4.3 `DataTableViewOptions({ table, sortableColumns, sortId, sortDir, onSelectColumn, onSelectDirection, onClearSort })`
+### 4.3 `DataTableViewOptions({ table, sortableColumns, activeColumnId, direction, onSelectColumn, onSelectDirection, onClearSort })`
 
 - Placement: right-aligned slot above table (`ml-auto` row), replacing current Columns button position.
-- Props: `table` (v9 instance, for visibility only), `sortableColumns: readonly { id: string; label: string }[]`, `sortId: CatalogSortId | null`, `sortDir: "asc" | "desc"`, `onSelectColumn: (columnId: string) => void`, `onSelectDirection: (dir: "asc" | "desc") => void`, `onClearSort: () => void`.
-- Rationale: catalog `handleSortChange(columnId)` runs 3-step cycle (default → opposite → view default). Direction radio must set explicit direction, never cycle. Separate callbacks keep cycle semantics intact.
+- Props (all generic — no feature imports inside shared): `table` (v9 instance, for visibility only), `sortableColumns: readonly { id: string; label: string }[]`, `activeColumnId: string | null`, `direction: "asc" | "desc"`, `onSelectColumn: (columnId: string) => void`, `onSelectDirection: (dir: "asc" | "desc") => void`, `onClearSort: () => void`.
+- Rationale: catalog `handleSortChange(columnId)` runs 3-step cycle (default → opposite → view default). Direction radio must set explicit direction, never cycle. Separate callbacks keep cycle semantics intact. Generic `activeColumnId` keeps `@/features/*` imports out of shared (per `AGENTS.md`).
 - Display dropdown: same behavior as current — `table.getAllColumns().filter((c) => c.getCanHide())`, checkbox items toggling `column.toggleVisibility`.
 - Sort dropdown: two sections separated by `DropdownMenuSeparator`.
-  - Top: direction radio group (Asc / Desc) bound to `sortDir`. Disabled when `sortId` is null. Change calls `onSelectDirection(dir)` only.
+  - Top: direction radio group (Asc / Desc) bound to `direction`. Disabled when `activeColumnId` is null. Change calls `onSelectDirection(dir)` only.
   - Bottom: column radio list from `sortableColumns` plus Clear item. Selection calls `onSelectColumn(id)` (same cycle as header click). Clear calls `onClearSort()`.
-- Catalog wiring (`products-view.tsx` + `product-table.tsx` passthrough): `onSelectColumn = handleSortChange` (existing, unchanged), `onSelectDirection = (dir) => replace({ sort: sortId ?? VIEW_DEFAULT_SORT[view].id, dir })`, `onClearSort = () => replace({ sort: null, dir: null })`. `ProductTable` gains two forwarded props; existing `onSortChange` stays for header factory. Sort stays URL-shareable.
+- Catalog wiring (`products-view.tsx` computes, `product-table.tsx` forwards): `activeColumnId = Object.keys(COLUMN_SORT_ID).find((c) => COLUMN_SORT_ID[c] === sortId) ?? null`, `direction = sortDir`, `onSelectColumn = handleSortChange` (existing, unchanged), `onSelectDirection = (dir) => replace({ sort: sortId ?? VIEW_DEFAULT_SORT[view]?.id ?? null, dir })` (no-op when resolved sort null, e.g. view `all` with no explicit sort), `onClearSort = () => replace({ sort: null, dir: null })`. `ProductTable` gains `onSelectDirection` + `onClearSort` forwarded props; existing `onSortChange` stays for header factory. Sort stays URL-shareable.
 
 ## 5. Data flow
 
 - Sort column: ViewOptions column pick → `onSelectColumn(id)` = `handleSortChange` cycle → URL update (`?sort&dir`, page reset) → RSC refetch → header highlights via `COLUMN_SORT_ID`.
-- Sort direction: ViewOptions direction pick → `onSelectDirection(dir)` → explicit URL `replace({ sort, dir })` (no cycle) → RSC refetch.
+- Sort direction: ViewOptions direction pick → `onSelectDirection(dir)` → explicit URL `replace({ sort: sortId ?? VIEW_DEFAULT_SORT[view]?.id ?? null, dir })` (no cycle; no-op when null) → RSC refetch.
 - Sort clear: Clear item → `onClearSort()` → `replace({ sort: null, dir: null })` → view default order.
 - Visibility: local table state only (`columnVisibility`), no URL change.
 - Actions: per-row `getItems(row.original)` built at render; no server roundtrip in v1 (toasts / `window.open` only).
