@@ -1,5 +1,10 @@
-import LandingPage from "@/features/landing/landing-page";
+import { redirect } from "next/navigation";
+import { getSession } from "@/features/auth/data/session";
 
-export default function Page() {
-  return <LandingPage />;
+export default async function Page() {
+  const session = await getSession();
+  if (session) {
+    redirect("/dashboard/catalog");
+  }
+  redirect("/sign-in");
 }

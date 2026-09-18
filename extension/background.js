@@ -12,10 +12,19 @@ const REGION_AFFILIATE_DOMAINS = {
   VN: "affiliate.shopee.vn",
 };
 
+const REGION_MAIN_DOMAINS = {
+  MY: "shopee.com.my",
+  ID: "shopee.co.id",
+  SG: "shopee.sg",
+  TH: "shopee.co.th",
+  PH: "shopee.ph",
+  VN: "shopee.vn",
+};
+
 // Cek status autentikasi / session di Shopee Affiliate (Multi-tier: Tab Aktif, Cookies SPC_EC/SPC_U, GraphQL)
 async function checkShopeeAuth(region = "ID") {
   const domain = REGION_AFFILIATE_DOMAINS[region] || "affiliate.shopee.co.id";
-  const mainDomain = region === "ID" ? "shopee.co.id" : "shopee.com.my";
+  const mainDomain = REGION_MAIN_DOMAINS[region] || "shopee.co.id";
 
   try {
     // Tier 1: Cek tab Shopee Affiliate yang sedang terbuka di browser
