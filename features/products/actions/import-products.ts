@@ -111,6 +111,18 @@ export async function importProducts(params: {
             category: row.category,
             listedOn: row.listedOn,
             needsRegion: row.needsRegion,
+            affiliateUrl: row.affiliateUrl,
+            commissionRate: row.commissionRate,
+            commissionAmount: row.commissionAmount,
+            commissionLiveRate: row.commissionLiveRate,
+            commissionLiveAmount: row.commissionLiveAmount,
+            commissionSocialRate: row.commissionSocialRate,
+            commissionSocialAmount: row.commissionSocialAmount,
+            commissionVideoRate: row.commissionVideoRate,
+            commissionVideoAmount: row.commissionVideoAmount,
+            hasKomisiXtra: row.hasKomisiXtra,
+            komisiXtraRate: row.komisiXtraRate,
+            komisiXtraAmount: row.komisiXtraAmount,
             addedById: userId,
           })),
           select: {
@@ -155,6 +167,18 @@ export async function importProducts(params: {
               category: row.category,
               listedOn: row.listedOn,
               needsRegion: row.needsRegion,
+              ...(row.affiliateUrl ? { affiliateUrl: row.affiliateUrl } : {}),
+              ...(row.commissionRate !== null ? { commissionRate: row.commissionRate } : {}),
+              ...(row.commissionAmount !== null ? { commissionAmount: row.commissionAmount } : {}),
+              ...(row.commissionLiveRate !== null ? { commissionLiveRate: row.commissionLiveRate } : {}),
+              ...(row.commissionLiveAmount !== null ? { commissionLiveAmount: row.commissionLiveAmount } : {}),
+              ...(row.commissionSocialRate !== null ? { commissionSocialRate: row.commissionSocialRate } : {}),
+              ...(row.commissionSocialAmount !== null ? { commissionSocialAmount: row.commissionSocialAmount } : {}),
+              ...(row.commissionVideoRate !== null ? { commissionVideoRate: row.commissionVideoRate } : {}),
+              ...(row.commissionVideoAmount !== null ? { commissionVideoAmount: row.commissionVideoAmount } : {}),
+              hasKomisiXtra: row.hasKomisiXtra,
+              ...(row.komisiXtraRate !== null ? { komisiXtraRate: row.komisiXtraRate } : {}),
+              ...(row.komisiXtraAmount !== null ? { komisiXtraAmount: row.komisiXtraAmount } : {}),
             },
           })
         )
@@ -174,6 +198,17 @@ export async function importProducts(params: {
     historicalSold: number;
     totalGmv: number;
     likedCount: number;
+    commissionRate: number | null;
+    commissionAmount: number | null;
+    commissionLiveRate: number | null;
+    commissionLiveAmount: number | null;
+    commissionSocialRate: number | null;
+    commissionSocialAmount: number | null;
+    commissionVideoRate: number | null;
+    commissionVideoAmount: number | null;
+    hasKomisiXtra: boolean;
+    komisiXtraRate: number | null;
+    komisiXtraAmount: number | null;
   }> = [];
 
   for (const row of newRows) {
@@ -190,6 +225,17 @@ export async function importProducts(params: {
         historicalSold: row.historicalSold,
         totalGmv: row.totalGmv,
         likedCount: row.likes,
+        commissionRate: row.commissionRate,
+        commissionAmount: row.commissionAmount,
+        commissionLiveRate: row.commissionLiveRate,
+        commissionLiveAmount: row.commissionLiveAmount,
+        commissionSocialRate: row.commissionSocialRate,
+        commissionSocialAmount: row.commissionSocialAmount,
+        commissionVideoRate: row.commissionVideoRate,
+        commissionVideoAmount: row.commissionVideoAmount,
+        hasKomisiXtra: row.hasKomisiXtra,
+        komisiXtraRate: row.komisiXtraRate,
+        komisiXtraAmount: row.komisiXtraAmount,
       });
     }
   }
@@ -206,6 +252,17 @@ export async function importProducts(params: {
       historicalSold: row.historicalSold,
       totalGmv: row.totalGmv,
       likedCount: row.likes,
+      commissionRate: row.commissionRate,
+      commissionAmount: row.commissionAmount,
+      commissionLiveRate: row.commissionLiveRate,
+      commissionLiveAmount: row.commissionLiveAmount,
+      commissionSocialRate: row.commissionSocialRate,
+      commissionSocialAmount: row.commissionSocialAmount,
+      commissionVideoRate: row.commissionVideoRate,
+      commissionVideoAmount: row.commissionVideoAmount,
+      hasKomisiXtra: row.hasKomisiXtra,
+      komisiXtraRate: row.komisiXtraRate,
+      komisiXtraAmount: row.komisiXtraAmount,
     });
   }
 

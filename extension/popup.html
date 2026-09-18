@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shofiliate Companion</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      width: 280px;
+      margin: 0;
+      padding: 16px;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+    }
+    .header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+      color: #38bdf8;
+    }
+    .status-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .status-row:last-child {
+      margin-bottom: 0;
+    }
+    .badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge-ok {
+      background: #14532d;
+      color: #4ade80;
+    }
+    .badge-warn {
+      background: #78350f;
+      color: #fde047;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding: 8px;
+      background: #0284c7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      box-sizing: border-box;
+    }
+    .btn:hover {
+      background: #0369a1;
+    }
+    .note {
+      font-size: 10px;
+      color: #94a3b8;
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚡ Shofiliate Companion</h1>
+  </div>
+  
+  <div class="status-box">
+    <div class="status-row">
+      <span>Shopee MY:</span>
+      <span id="status-my" class="badge badge-warn">Mengecek...</span>
+    </div>
+    <div class="status-row">
+      <span>Shopee ID:</span>
+      <span id="status-id" class="badge badge-warn">Mengecek...</span>
+    </div>
+  </div>
+
+  <a href="https://affiliate.shopee.com.my" target="_blank" class="btn" style="margin-bottom: 6px;">Buka Shopee Affiliate (MY)</a>
+  <a href="https://affiliate.shopee.co.id" target="_blank" class="btn">Buka Shopee Affiliate (ID)</a>
+
+  <div class="note">
+    💡 Pastikan Anda sudah login di portal Shopee Affiliate agar auto-enrichment komisi & link berfungsi saat upload file di web Shofiliate.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

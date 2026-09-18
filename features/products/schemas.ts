@@ -45,10 +45,28 @@ export const rawImportRowSchema = z.object({
   total_gmv: z.union([z.string(), z.number()]).optional().nullable(),
   product_url: z.string().optional().nullable(),
   url: z.string().optional().nullable(),
+  commission_rate: z.union([z.string(), z.number()]).optional().nullable(),
+  commission_amount: z.union([z.string(), z.number()]).optional().nullable(),
+  commission_live_rate: z.union([z.string(), z.number()]).optional().nullable(),
+  commission_live_amount: z.union([z.string(), z.number()]).optional().nullable(),
+  commission_social_rate: z.union([z.string(), z.number()]).optional().nullable(),
+  commission_social_amount: z.union([z.string(), z.number()]).optional().nullable(),
+  commission_video_rate: z.union([z.string(), z.number()]).optional().nullable(),
+  commission_video_amount: z.union([z.string(), z.number()]).optional().nullable(),
+  has_komisi_xtra: z.union([z.boolean(), z.string()]).optional().nullable(),
+  komisi_xtra_rate: z.union([z.string(), z.number()]).optional().nullable(),
+  komisi_xtra_amount: z.union([z.string(), z.number()]).optional().nullable(),
+  affiliate_link: z.string().optional().nullable(),
+  affiliate_url: z.string().optional().nullable(),
 }).refine((data) => !!(data.product_url || data.url), {
   message: "product_url or url is required",
   path: ["product_url"],
 });
+
+export function parseBooleanSafe(val: unknown): boolean {
+  if (val === true || val === "true" || val === 1 || val === "1") return true;
+  return false;
+}
 
 export function parseIntegerSafe(val: unknown): number {
   if (val === null || val === undefined) return 0;
@@ -106,6 +124,28 @@ export function parseCurrencyAndAmount(
     currency: detectedCurrency,
     amount: isNaN(amount) ? 0 : amount,
   };
+}
+
+export function parseCommissionRate(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "number") return isNaN(val) ? null : val;
+  const str = String(val).trim();
+  if (!str || str === "-" || str === "null" || str === "undefined") return null;
+  const cleaned = str.replace(/%/g, "").trim();
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? null : parsed;
+}
+
+export function parseCommissionAmount(
+  val: unknown,
+  fallbackRegion: RegionCode
+): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "number") return isNaN(val) ? null : val;
+  const str = String(val).trim();
+  if (!str || str === "-" || str === "null" || str === "undefined") return null;
+  const parsed = parseCurrencyAndAmount(str, fallbackRegion);
+  return parsed.amount > 0 ? parsed.amount : null;
 }
 
 export function detectRegionFromUrl(url: string): {
@@ -246,6 +286,37 @@ export function parseImportRow(
     }
   }
 
+  // Parse Affiliate Link & Commission
+  const rawAffiliateLink = raw.affiliate_link ?? raw.affiliate_url;
+  const affiliateUrl =
+    rawAffiliateLink && typeof rawAffiliateLink === "string" && rawAffiliateLink.trim()
+      ? rawAffiliateLink.trim()
+      : null;
+  const commissionRate = parseCommissionRate(raw.commission_rate);
+  const commissionAmount = parseCommissionAmount(raw.commission_amount, region);
+
+  // Parse Multi-Channel Commissions (Live, Social, Video, Xtra)
+  const commissionLiveRate =
+    parseCommissionRate(raw.commission_live_rate) ?? commissionRate;
+  const commissionLiveAmount =
+    parseCommissionAmount(raw.commission_live_amount, region) ?? commissionAmount;
+
+  const commissionSocialRate =
+    parseCommissionRate(raw.commission_social_rate) ?? commissionLiveRate;
+  const commissionSocialAmount =
+    parseCommissionAmount(raw.commission_social_amount, region) ?? commissionLiveAmount;
+
+  const commissionVideoRate =
+    parseCommissionRate(raw.commission_video_rate) ?? commissionLiveRate;
+  const commissionVideoAmount =
+    parseCommissionAmount(raw.commission_video_amount, region) ?? commissionLiveAmount;
+
+  const hasKomisiXtra =
+    parseBooleanSafe(raw.has_komisi_xtra) ||
+    !!(raw.komisi_xtra_rate || raw.komisi_xtra_amount);
+  const komisiXtraRate = parseCommissionRate(raw.komisi_xtra_rate);
+  const komisiXtraAmount = parseCommissionAmount(raw.komisi_xtra_amount, region);
+
   const parsedRow: ParsedProductRow = {
     itemId,
     shopId,
@@ -265,6 +336,18 @@ export function parseImportRow(
     gmv30d,
     historicalSold: parseIntegerSafe(raw.total_sales),
     totalGmv,
+    commissionRate,
+    commissionAmount,
+    commissionLiveRate,
+    commissionLiveAmount,
+    commissionSocialRate,
+    commissionSocialAmount,
+    commissionVideoRate,
+    commissionVideoAmount,
+    hasKomisiXtra,
+    komisiXtraRate,
+    komisiXtraAmount,
+    affiliateUrl,
   };
 
   return { success: true, data: parsedRow };

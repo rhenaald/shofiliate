@@ -27,11 +27,12 @@ export function ImportPageComposition() {
     setStep("preview");
   };
 
-  const handleConfirmImport = async () => {
+  const handleConfirmImport = async (rowsToImport?: RawImportRow[]) => {
     setIsLoading(true);
     setGeneralError(null);
+    const targetRows = rowsToImport || rows;
     try {
-      const res = await importProducts({ fileName, rows });
+      const res = await importProducts({ fileName, rows: targetRows });
       setResult(res);
       setStep("result");
     } catch (err: unknown) {
