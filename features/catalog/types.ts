@@ -60,6 +60,11 @@ export interface CatalogProductDTO {
   likedCount: number;
   scrapedAt: string;
   batchId: string | null;
+  affiliateUrl: string | null;
+  komisiXtraRate: number | null;
+  commissionLiveAmount: number | null;
+  commissionSocialAmount: number | null;
+  commissionVideoAmount: number | null;
 }
 
 export interface CatalogBatchStamp {
@@ -93,6 +98,11 @@ export interface CatalogRow {
   growth30d: number;
   totalSales: number;
   gmv30d: number;
+  affiliateUrl: string | null;
+  komisiXtraRate: number | null;
+  commissionLiveAmount: number | null;
+  commissionSocialAmount: number | null;
+  commissionVideoAmount: number | null;
 }
 
 export function dtoToCatalogRow(dto: CatalogProductDTO): CatalogRow {
@@ -111,5 +121,10 @@ export function dtoToCatalogRow(dto: CatalogProductDTO): CatalogRow {
     growth30d: dto.growth30d,
     totalSales: dto.historicalSold,
     gmv30d: dto.gmv30d,
+    affiliateUrl: dto.affiliateUrl,
+    komisiXtraRate: dto.komisiXtraRate,
+    commissionLiveAmount: dto.commissionLiveAmount,
+    commissionSocialAmount: dto.commissionSocialAmount,
+    commissionVideoAmount: dto.commissionVideoAmount,
   };
 }

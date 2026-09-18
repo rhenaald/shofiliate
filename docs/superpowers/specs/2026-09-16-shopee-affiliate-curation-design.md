@@ -29,25 +29,29 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 **Persona utama:** affiliate live streamer (user harian). **Persona sekunder:** admin/lead tim (monitoring target & kualitas katalog).
 
 **Perilaku saat ini:**
+
 1. Scraping via web extension di website Shopee untuk dapat daftar produk.
 2. Riset manual setiap hari untuk penuhi 300 produk.
 3. Manajemen lama berbasis tabel (table-based management) — sudah familiar dengan pola tabel, filter, sort.
 
 **Pain points (dari user):**
+
 1. Pencarian produk masih manual untuk penuhi target 300.
-2. Evaluasi *Produk Best Seller* dan *Produk Trending* manual.
+2. Evaluasi _Produk Best Seller_ dan _Produk Trending_ manual.
 3. Kategorisasi region produk manual.
 
 ## 3. Tujuan & success criteria
 
 **Tujuan:**
+
 1. Otomatiskan pendaftaran hasil scraping ke database (tidak copy-paste satu per satu).
-2. Sediakan view *Best Seller* dan *Trending* yang konsisten, berbasis snapshot (tidak real-time).
+2. Sediakan view _Best Seller_ dan _Trending_ yang konsisten, berbasis snapshot (tidak real-time).
 3. Evaluasi produk bisa difilter per region (default Malaysia).
 4. Sediakan daftar pin/favorit bersama untuk persiapan live.
 5. Tetap dukung input manual.
 
 **Success criteria (MVP, terukur):**
+
 - SC1: Import 300+ baris CSV/JSON format aktual (§6 F1) selesai < 30 detik dengan laporan sukses/duplikat/gagal per baris.
 - SC2: Streamer bisa melihat progres "X/300 hari ini" secara real-time dari data yang sudah masuk.
 - SC3: Filter Best Seller & Trending dalam satu katalog menampilkan ranking yang dapat direproduksi dari snapshot yang sama (ada label "data per tanggal X").
@@ -57,6 +61,7 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 ## 4. Scope
 
 **In scope (MVP):**
+
 - F0 Auth & otorisasi (login, guard dashboard, peran streamer/admin).
 - F1 Import CSV/JSON format aktual extension + validasi + deduplikasi.
 - F2 Katalog produk + tracker target 300 harian per streamer.
@@ -64,11 +69,13 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - F4 Filter & evaluasi per region (MY, SG, ID, TH, PH, VN).
 - F5 Pin/favorit shared tim sebagai **page berbeda** (`/dashboard/products/pins` — revisi susulan), aksi pin/unpin dari tabel katalog.
 - F6 Input manual single product + edit koreksi (khususnya region & atribut wajib).
+- F7 Komisi affiliate 4 kanal (Xtra %, Live, Sosmed, Video nominal) & aksi affiliate link (copy + buka) pada katalog.
 
 **Out of scope (ditunda):**
+
 - Integrasi langsung extension → API (push otomatis); MVP hanya upload file.
 - Auto-scrape server-side / scheduler scraping Shopee (risiko ToS + butuh proxy per negara).
-- Data komisi affiliate, link affiliasi shortlink, laporan konversi.
+- Laporan konversi detail, sub-ID custom tracking per sesi live.
 - Deteksi kompetisi antar-affiliate (Shopee Open API tidak mengekspos field ini — temuan Exa).
 - Multi-bahasa UI, aplikasi mobile, notifikasi real-time.
 
@@ -77,10 +84,12 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 > Bagian ini sesuai permintaan user untuk mencatat stack & pilihan desain yang sudah ada di repo.
 
 **Core:**
+
 - `next@16.3.5` App Router, `react@19.2.8`, `typescript@5`, `pnpm@11.17.0`.
 - Scripts: `dev`, `build` (`prisma generate && next build`), `postinstall` (`prisma generate`), `db:push`, `db:migrate`, `db:generate`, `db:studio`.
 
 **Data & auth:**
+
 - `prisma@7.10.0` + `@prisma/client@7.10.0` + `@prisma/adapter-neon@7.10.0`, provider `postgresql`.
 - Prisma Client output di `generated/prisma` (gitignored, diregenerasi via `db:generate`/`postinstall`). **Jangan import `@prisma/client` langsung** — via `lib/prisma.ts`.
 - `lib/prisma.ts`: singleton (`globalThis`), `PrismaNeon({ connectionString: DATABASE_URL })`, diawali `import "server-only"`.
@@ -88,6 +97,7 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - `lib/auth.ts` server-only; `lib/auth-client.ts` client (`signIn/signUp/signOut/useSession` + `usernameClient/adminClient`).
 
 **UI & state:**
+
 - `tailwindcss@4` + `@tailwindcss/postcss`, `shadcn` style `base-nova`, baseColor `neutral`, `rsc:true`, icon `lucide-react@1.45.0`, font `Poppins` (400/600/700/800/900, `--font-sans`) di `app/layout.tsx`.
 - `components/ui/`: avatar, breadcrumb, button-group, button, collapsible, dropdown-menu, field, input, label, separator, sheet, sidebar, skeleton, table, toast (`Toaster` dipasang di root), tooltip (`TooltipProvider` di root).
 - `@tanstack/react-query@5.102.8`: `QueryClientProvider` di `app/providers.tsx` (`"use client"`), `staleTime: 60_000`, pola SSR `makeQueryClient/getQueryClient`.
@@ -96,6 +106,7 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - `server-only@0.0.1`, `cn` (re-export dari paket `cn`), `dotenv`, `tw-animate-css`, `@base-ui/react`.
 
 **Struktur & konvensi (dari `AGENTS.md` — mengikat untuk PRD ini):**
+
 - `app/` hanya route caller, Server Component only. Tidak ada `"use client"` di bawah `app/` kecuali `api/` route handler. File route tidak berisi business logic/fetch/validasi — hanya memanggil komposisi di `features/<name>/pages/`.
 - `features/<name>/`: `actions/` (server actions `"use server"`, mutasi saja) + `schemas.ts` (validasi zod di boundary actions) + `data/` (query server-only via `lib/prisma.ts`) + `pages/` (komposisi) + `components/` (+`shared/`) + `types.ts`.
 - `actions/` & `data/` diawali `import "server-only"`, tidak diimport dari client component; props serializable.
@@ -105,6 +116,7 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 ## 6. Kebutuhan fungsional
 
 ### F0 — Auth & otorisasi (ditambahkan 2026-09-16)
+
 - Status existing: better-auth terkonfigurasi (`emailAndPassword` min 8 + autoSignIn, plugin `username()`, `admin()`, `nextCookies()`, Prisma adapter); `features/auth/` sudah ada (`schemas.ts`, `components/`, `pages/sign-in-pages.tsx`); rute `app/(auth)/sign-in/` ada. Yang belum: route guard, peran default, enforcement session di fitur products. Tidak ada `middleware.ts` di repo.
 - Login: username atau email + password. Semua tetap di `features/auth/` mengikuti AGENTS.md (tidak ada logika auth di `app/`).
 - Guard: `middleware.ts` melindungi `/dashboard/**` (termasuk `/products`, `/pins`, `/import`) → redirect ke sign-in bila tanpa session.
@@ -114,7 +126,9 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - Enforcement: semua `data/`/`actions/` products wajib baca session server-side; `addedBy/importedBy/pinnedBy` dari session, tidak dari client. Ini menjawab open question §14.1: ya, admin boleh mengoreksi, tercatat.
 
 ### F1 — Import hasil scraping (CSV/JSON, format aktual)
+
 - **Sumber:** web extension milik user. Contoh aktual (2 baris, dipersingkat):
+
 ```json
 [
   {
@@ -151,23 +165,24 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
   }
 ]
 ```
+
 - **Mapping wajib (extension → sistem):**
 
-| Extension | Sistem | Aturan parsing |
-|---|---|---|
-| `product_id` | `Product.itemId` | string digit, wajib |
-| `product_url` `.../product/{shopId}/{product_id}` | `Product.shopId` + `Product.url` | regex `/product\/(\d+)\/(\d+)/`; validasi `product_id` di URL == field `product_id`; jika mismatch → failed |
-| domain URL | `Product.region` | `shopee.com.my→MY`, `shopee.sg→SG`, `shopee.co.id→ID`, `shopee.co.th→TH`, `shopee.ph→PH`, `shopee.vn→VN`; tak terdeteksi → `needsRegion=true` (karantina) |
-| `product_name` | `Product.name` | trim, wajib non-empty, maks 500 char |
-| `seller_name` | `Product.shopName` | opsional |
-| `category` | `Product.category` | string hierarki `-` dipisah, disimpan apa adanya |
-| `listed_on` | `Product.listedOn` | `YYYY-MM-DD`; invalid → null + warning |
-| `likes` | snapshot `likedCount` | `"-"` → null; selain itu int ≥ 0 |
-| `sales_1d/7d/30d` | snapshot `sales1d/sales7d/sales30d` | `"-"` → null; int ≥ 0 |
-| `growth_30d` | snapshot `growth30d` | `"+1.89%"` → `1.89`, `"-43.75%"` → `-43.75`; `"-"` → null |
-| `gmv_30d/total_gmv` | snapshot `gmv30d` + `Product.currency` | `"RM23898.84"` → amount `23898.84` + currency dari simbol (`RM→MYR`, `S$→SGD`, `Rp→IDR`, `฿→THB`, `₱→PHP`, `₫→VND`); simbol tak dikenal → currency dari region, amount tetap disimpan + warning |
-| `total_sales` | snapshot `historicalSold` | int ≥ 0; ini dasar Best Seller |
-| `product_url` | `Product.url` | wajib URL Shopee valid |
+| Extension                                         | Sistem                                 | Aturan parsing                                                                                                                                                                                  |
+| ------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `product_id`                                      | `Product.itemId`                       | string digit, wajib                                                                                                                                                                             |
+| `product_url` `.../product/{shopId}/{product_id}` | `Product.shopId` + `Product.url`       | regex `/product\/(\d+)\/(\d+)/`; validasi `product_id` di URL == field `product_id`; jika mismatch → failed                                                                                     |
+| domain URL                                        | `Product.region`                       | `shopee.com.my→MY`, `shopee.sg→SG`, `shopee.co.id→ID`, `shopee.co.th→TH`, `shopee.ph→PH`, `shopee.vn→VN`; tak terdeteksi → `needsRegion=true` (karantina)                                       |
+| `product_name`                                    | `Product.name`                         | trim, wajib non-empty, maks 500 char                                                                                                                                                            |
+| `seller_name`                                     | `Product.shopName`                     | opsional                                                                                                                                                                                        |
+| `category`                                        | `Product.category`                     | string hierarki `-` dipisah, disimpan apa adanya                                                                                                                                                |
+| `listed_on`                                       | `Product.listedOn`                     | `YYYY-MM-DD`; invalid → null + warning                                                                                                                                                          |
+| `likes`                                           | snapshot `likedCount`                  | `"-"` → null; selain itu int ≥ 0                                                                                                                                                                |
+| `sales_1d/7d/30d`                                 | snapshot `sales1d/sales7d/sales30d`    | `"-"` → null; int ≥ 0                                                                                                                                                                           |
+| `growth_30d`                                      | snapshot `growth30d`                   | `"+1.89%"` → `1.89`, `"-43.75%"` → `-43.75`; `"-"` → null                                                                                                                                       |
+| `gmv_30d/total_gmv`                               | snapshot `gmv30d` + `Product.currency` | `"RM23898.84"` → amount `23898.84` + currency dari simbol (`RM→MYR`, `S$→SGD`, `Rp→IDR`, `฿→THB`, `₱→PHP`, `₫→VND`); simbol tak dikenal → currency dari region, amount tetap disimpan + warning |
+| `total_sales`                                     | snapshot `historicalSold`              | int ≥ 0; ini dasar Best Seller                                                                                                                                                                  |
+| `product_url`                                     | `Product.url`                          | wajib URL Shopee valid                                                                                                                                                                          |
 
 - **Perilaku:**
   - Header CSV boleh snake_case persis seperti contoh atau JSON array of objects; tidak perlu mapping manual di MVP (format dikunci ke contoh ini). Jika header berbeda → tolak dengan pesan "format tidak dikenali, gunakan export extension v1".
@@ -178,29 +193,34 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - **Validasi:** skema zod `importRowSchema` di `features/products/schemas.ts` di boundary `actions/`; contoh: `product_id` regex `^\d+$`, `product_url` harus match pola Shopee, `sales_*` coerce `"-"`→null.
 
 ### F2 — Katalog + target 300 harian per streamer
+
 - Definisi "terdaftar": produk unik `(region,itemId,shopId)` yang dibuat oleh user pada hari kalender tersebut (zona waktu Asia/Kuala_Lumpur default, konfigurabel) melalui import atau input manual, dikurangi duplikat.
 - Dashboard menampilkan: progress bar `X/300`, sisa kebutuhan, status tercapai/belum, riwayat 7/30 hari.
 - Aturan anti-gaming v1: update snapshot produk yang sudah ada di hari yang sama **tidak** menambah counter; produk yang sama didaftarkan dua streamer berbeda tetap dihitung per streamer masing-masing (kepemilikan via `addedBy`), tapi katalog global tetap satu entitas + relasi kontributor.
 - Tabel katalog: satu tabel utama (§9) + TanStack Query; sort/filter/pagination server-side untuk skala ribuan baris.
 
 ### F3 — Filter Best Seller (snapshot, tidak real-time; bukan page)
+
 - Revisi R2: **Best Seller adalah nilai filter `view=best` pada page katalog**, bukan rute tersendiri.
 - Definisi MVP: ranking by **`total_sales` (historical all-time) tertinggi** pada snapshot terakhir per region (atau global dengan kolom region).
 - Interaksi: segmented control `Semua | Best Seller | Trending`; saat `Best` aktif → tabel auto-sort `total_sales` desc + tampilkan badge "Best"; stempel `Data per: YYYY-MM-DD HH:mm (batch #id)` tetap di atas tabel + tombol "Lihat metodologi".
 - Tidak ada klaim real-time di UI.
 
 ### F4 — Filter Trending (velocity, snapshot; bukan page)
+
 - Revisi R2: **Trending adalah nilai filter `view=trending` pada page katalog**, bukan rute tersendiri.
 - Definisi MVP: ranking by velocity dari field aktual: prioritas `sales_30d` desc, tie-breaker `growth_30d` desc; jika ada ≥2 snapshot ≥7 hari untuk produk yang sama: `velocity7d = (sales30d_terbaru − sales30d_7hari_lalu)/7` sebagai info tambahan (bukan pengganti sort utama di MVP agar konsisten dengan data extension).
 - Syarat masuk trending: `sales_30d ≥ 10` (ganti threshold rating karena data aktual tidak membawa rating; jika nanti ada `ratingCount` → tambah syarat `≥10`). Baris dengan `sales_30d = null` tidak muncul di view Trending.
 - Label jelas per baris: `"+1.89% / 322 terjual 30d"` dari field `growth_30d` + `sales_30d`, bukan sekadar "Trending".
 
 ### F5 — Region
+
 - Enum: `MY | SG | ID | TH | PH | VN`. Default filter = `MY` (utama). Filter region berupa dropdown/badge di toolbar tabel yang sama (bukan page).
 - Mata uang mengikuti simbol GMV (`RM→MYR`, dst., lihat F1); tidak ada konversi kurs di MVP. Perbandingan lintas region hanya untuk sold/growth, bukan GMV nominal.
 - Evaluasi per region: ringkasan angka di atas tabel (jumlah produk, median `sales_30d`, top-1 `total_sales`) — cukup angka + tabel di MVP, belum perlu chart library baru.
 
 ### F6 — Pin / favorit shared tim (page berbeda)
+
 - Revisi susulan: pins adalah **page tersendiri** `app/dashboard/products/pins/page.tsx → features/products/pages/pins-page.tsx`, bukan sekadar toggle di katalog.
 - Satu board bersama default (`Team Board`); pin = relasi `(productId, pinnedBy, note?, createdAt)`.
 - Satu produk hanya satu pin aktif di board yang sama (idempoten); unpin tercatat (soft delete + audit).
@@ -208,6 +228,7 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - Aksi pin/unpin tetap ada sebagai **kolom aksi di DataTable katalog** (optimistic update via TanStack Query); page Pins menampilkan hasil pin dengan kolom tambahan `note`, `pinnedBy`, `pinnedAt` + aksi unpin/edit note + filter region/search yang sama.
 
 ### F7 — Input manual
+
 - Form single product (RHF + zod) mengikuti field aktual: `product_url` (wajib, untuk parse `shopId`+`region`), `product_name`, `seller_name`, `category`, `listed_on`, `likes`, `sales_1d/7d/30d`, `growth_30d`, `gmv_30d`, `total_sales`, `total_gmv`. Nilai `"-"` diizinkan di form dan diparse jadi null.
 - Jika URL tidak match `/product/(\d+)/(\d+)/` → tolak dengan pesan jelas (minta URL produk Shopee yang valid), tidak generate ID lokal (keputusan revisi: cegah duplikat liar).
 - Edit hanya untuk field korektif (region, nama, seller, kategori, listed_on); metrik sold/likes/growth/GMV hanya berubah via import snapshot berikutnya (tidak bisa diedit manual untuk jaga integritas ranking).
@@ -326,6 +347,7 @@ Catatan Context7: pola di atas memakai relasi standar Prisma + index untuk query
 ## 9. UX & arsitektur fitur (katalog + filter, Pins page terpisah, DataTable v9 + shadcn)
 
 **Revisi R2/R3 — rute (semua RSC caller; Best/Trending = filter, Pins = page):**
+
 - `app/dashboard/products/page.tsx` → `features/products/pages/products-page.tsx` — page katalog. Menerima `searchParams { view: 'all'|'best'|'trending', region, q, category }` dan fetch via `data/` di server.
 - `app/dashboard/products/pins/page.tsx` → `features/products/pages/pins-page.tsx` — **page pin bersama terpisah** (revisi susulan). Menerima `searchParams { region, q }`, fetch via `data/listPins`.
 - `app/dashboard/products/import/page.tsx` → `features/products/pages/import-page.tsx` (upload + preview 10 baris + hasil).
@@ -334,6 +356,7 @@ Catatan Context7: pola di atas memakai relasi standar Prisma + index untuk query
 - State filter katalog disimpan di URL (shareable, mis. `/dashboard/products?view=trending&region=MY`) — komponen toolbar (client) update via `router.replace`, tabel re-fetch via RSC + TanStack Query cache `staleTime 60s`. Toolbar katalog berisi link "Lihat Pins" menuju page pins (bukan toggle).
 
 **Struktur fitur:**
+
 ```
 features/products/
   schemas.ts        # importRowSchema (snake_case aktual + coerce "-"→null), manualProductSchema, pinSchema, regionEnum
@@ -345,19 +368,23 @@ features/products/
 ```
 
 **Tampilan tabel (revisi R3 — TanStack Table v9 + shadcn, perjelas):**
+
 - Reuse `components/data-table.tsx` generik (`tableFeatures`, `useTable`, `FlexRender`) untuk **kedua page**; definisi kolom: `features/products/components/product-columns.tsx` (katalog) dan `pin-columns.tsx` (pins: kolom katalog inti + `note` + `pinnedBy` + `pinnedAt`, tanpa kolom pin-aksi melainkan unpin). Jangan fork DataTable.
-- Kolom MVP (sesuai field aktual, berurutan):
-  1. `pin` (aksi icon, non-sortable) — pin/unpin optimistic.
-  2. `product_name` (link ke `product_url`, 2-line clamp + sub `seller_name` kecil) — sortable text, global filter.
-  3. `region` (Badge shadcn, default MY) — filter dropdown.
-  4. `category` (truncate, tooltip full) — filter text.
-  5. `likes` (numeric right-align) — sortable.
-  6. `sales_30d` (numeric, highlight saat `view=trending`) — sortable.
-  7. `growth_30d` (Badge: hijau `+`, merah `-`, muted `"-"`) — sortable.
-  8. `total_sales` (numeric bold saat `view=best`) — sortable, default sort saat `view=best`.
-  9. `gmv_30d` (amount + simbol asli `RM`, right-align) — sortable.
-  10. `listed_on` (date `YYYY-MM-DD`) — sortable.
+- Kolom Katalog (revisi 2026-09-18, urutan kiri ke kanan):
+  1. `select` (checkbox baris, sticky-left).
+  2. `product_name` & `seller_name` (link ke `product_url`, 2-line clamp nama produk + seller_name kecil di bawahnya) — sortable text, left-align.
+  3. `category` (text wrap, left-align).
+  4. `komisiXtra` (Xtra (%)) — right-align numeric.
+  5. `commissionLive` (Live nominal currency) — right-align numeric.
+  6. `commissionSocial` (Sosmed nominal currency) — right-align numeric.
+  7. `commissionVideo` (Video nominal currency) — right-align numeric.
+  8. `likes` (jumlah likes) — right-align numeric, sortable.
+  9. `total_sales` / `Sold` (total sales all-time) — right-align numeric, sortable, default sort saat `view=best`.
+  10. `affiliate` (shadcn ButtonGroup icon-only: Salin link & Buka link dengan Tooltip; disabled jika link kosong) — non-sortable.
   11. `actions` (dropdown: Lihat di Shopee, Pin, Koreksi region).
+- Kolom bawaan tersembunyi (default hidden, dapat dimunculkan via dropdown Columns):
+  `pin`, `region`, `sales_30d` (highlight saat `view=trending`), `growth_30d`, `gmv_30d`, `listed_on`.
+- Tabel dibungkus komponen shadcn `ScrollArea` dengan `ScrollBar` horizontal agar lebar tabel terkontainer tanpa overflow x layout.
 - Toolbar katalog (shadcn): `Input` search (nama/seller, pakai `filterColumn` DataTable untuk client-filter + `q` server untuk dataset besar), `Select` region (default MY), segmented `Semua|Best Seller|Trending`, toggle `Perlu region`, tombol `Lihat Pins` (link ke `/dashboard/products/pins`) + `Import` + `Input manual`. Tidak ada toggle "Hanya pin" di katalog — pin dilihat di page Pins.
 - Page Pins toolbar: `Input` search + `Select` region + info board ("Team Board, N pin aktif") + tombol kembali ke katalog.
 - Header atas tabel katalog: `progress-card` (`X/300` + sisa) kiri, stempel batch kanan (`Data per: YYYY-MM-DD HH:mm batch #id` + `Lihat metodologi` via Tooltip). Page Pins tidak menampilkan progress 300 (fokus kurasi live).
@@ -365,6 +392,7 @@ features/products/
 - Pagination + sorting + visibility + selection (bulk pin) dari fitur DataTable yang sudah ada (`rowPaginationFeature`, `rowSortingFeature`, `rowSelectionFeature`, `columnVisibilityFeature`); untuk >1.000 baris pakai pagination server-side, filter client hanya untuk page aktif.
 
 **Aturan batas (tetap):**
+
 - Client component tidak import `data/`/`actions/` langsung; data diambil di `pages/` (RSC) lalu props serializable ke `components/`.
 - Mutasi via server actions + revalidate; list besar via TanStack Query.
 
@@ -399,16 +427,19 @@ features/products/
 ## 13. Fase + Linear breakdown (Hybrid Thin+, siap copy ke Linear)
 
 **Fase:**
+
 - **MVP (fase 1):** F0–F7 di atas, satu board bersama di page Pins terpisah, formula v1 field aktual, katalog + filter best/trending, tanpa chart.
 - **Fase 2:** riwayat harga/GMV per produk, perbandingan region side-by-side, board per live session, threshold trending konfigurabel admin, export shortlist.
 - **Fase 3:** integrasi extension→API langsung, skor opportunity (butuh data komisi), notifikasi progres 300.
 
 **Aturan Linear yang dipakai (protocol `2026-09-15-linear-project-protocol-design.md` + skill `linear-tracking`):**
+
 - Satu project per area produk, satu team; cycle 1 minggu Sen–Sen; status `Backlog → Todo → In Progress → In Review → Done` (+`Canceled`/`Duplicate`).
 - Milestone = fase demoable (3–10 issues, 1–4 cycle), nama `[Phase N] Outcome`, maks 2 open. MVP ini = satu milestone.
 - Parent = feature 1–3 hari; Sub = task <4 jam, maks 1 level. Judul `[area] Verb outcome` ≤60 char. Deskripsi hanya header `Goal:/Scope:/Acceptance:/Links:` ≤15 baris. Tepat satu label (`feature|bug|chore|docs|spike`). Attachment hanya parent (sample <30 baris). Komentar: progress/blocker/decision/review.
 
 **Milestone siap buat (JIT, 1 untuk MVP):**
+
 - `[Phase 1] Katalog + filter kurasi usable` — demo: login → import 300 baris aktual → katalog terfilter best/trending → page pins bersama → progres 300. Target: akhir cycle berjalan +1.
 
 **Parent issues siap copy (7 parent, masing-masing ≤60 char, label + acceptance):**
@@ -510,14 +541,14 @@ Subs: [products] form+validasi; [products] karantina UI
 
 ## Appendix A — Mapping region & mata uang (dari Exa)
 
-| Region | Domain | Currency | Bahasa |
-|---|---|---|---|
-| MY (utama) | shopee.com.my | MYR | Melayu/Inggris |
-| SG | shopee.sg | SGD | Inggris |
-| ID | shopee.co.id | IDR | Indonesia |
-| TH | shopee.co.th | THB | Thai |
-| PH | shopee.ph | PHP | Inggris/Filipino |
-| VN | shopee.vn | VND | Vietnam |
+| Region     | Domain        | Currency | Bahasa           |
+| ---------- | ------------- | -------- | ---------------- |
+| MY (utama) | shopee.com.my | MYR      | Melayu/Inggris   |
+| SG         | shopee.sg     | SGD      | Inggris          |
+| ID         | shopee.co.id  | IDR      | Indonesia        |
+| TH         | shopee.co.th  | THB      | Thai             |
+| PH         | shopee.ph     | PHP      | Inggris/Filipino |
+| VN         | shopee.vn     | VND      | Vietnam          |
 
 ## Appendix B — Self-review spec (revisi v3)
 
