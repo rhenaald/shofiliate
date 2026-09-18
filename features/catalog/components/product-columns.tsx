@@ -1,17 +1,15 @@
 "use client";
 
 import { sortFn_alphanumeric, sortFn_text, type ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, MoreHorizontal, Pin } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Pin } from "lucide-react";
 
 import type { DataTableFeatures } from "@/components/data-table";
+import {
+  withActionColumn,
+  withSelectColumn,
+} from "@/components/shared/data-table/columns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CatalogRow, CatalogView } from "@/features/catalog/types";
@@ -96,38 +94,7 @@ export function createProductColumns(
     ),
   });
   return [
-    {
-      id: "select",
-      enableSorting: false,
-      enableHiding: false,
-      header: ({ table }) => {
-        const all = table.getIsAllRowsSelected();
-        const some = table.getIsSomeRowsSelected();
-        return (
-          <input
-            type="checkbox"
-            role="checkbox"
-            aria-label="Pilih semua"
-            checked={all}
-            ref={(el) => {
-              if (el) el.indeterminate = !all && some;
-            }}
-            onChange={(e) => table.toggleAllRowsSelected(e.target.checked)}
-            className="size-4 accent-current"
-          />
-        );
-      },
-      cell: ({ row }) => (
-        <input
-          type="checkbox"
-          role="checkbox"
-          aria-label="Pilih baris"
-          checked={row.getIsSelected()}
-          onChange={(e) => row.toggleSelected(e.target.checked)}
-          className="size-4 accent-current"
-        />
-      ),
-    },
+    withSelectColumn<CatalogRow>(),
     {
       id: "pin",
       header: () => <span className="sr-only">Pin</span>,
@@ -259,47 +226,29 @@ export function createProductColumns(
       ),
       sortFn: sortFn_text,
     },
-    {
-      id: "actions",
-      header: () => <div className="text-center">Actions</div>,
-      enableSorting: false,
-      enableHiding: false,
-      cell: ({ row }) => {
-        const url = row.original.url;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="ghost" size="icon-sm" aria-label="Aksi baris">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => {
-                  if (url) window.open(url, "_blank", "noopener,noreferrer");
-                }}
-              >
-                <ExternalLink className="size-3.5" />
-                Lihat di Shopee
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => toast.add({ title: "Pin — coming in SH-9" })}
-              >
-                <Pin className="size-3.5" />
-                Pin
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => toast.add({ title: "Koreksi region — coming in SH-8" })}
-              >
-                Koreksi region
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-    },
+    withActionColumn<CatalogRow>({
+      getItems: (data) => [
+        {
+          id: "open",
+          label: "Lihat di Shopee",
+          icon: ExternalLink,
+          onSelect: () => {
+            if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+          },
+        },
+        {
+          id: "pin",
+          label: "Pin",
+          icon: Pin,
+          onSelect: () => toast.add({ title: "Pin — coming in SH-9" }),
+        },
+        {
+          id: "fix-region",
+          label: "Koreksi region",
+          onSelect: () => toast.add({ title: "Koreksi region — coming in SH-8" }),
+        },
+      ],
+    }),
   ];
 }
 
