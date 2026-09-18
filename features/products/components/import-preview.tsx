@@ -7,6 +7,9 @@ import {
   ExternalLinkIcon,
   FileSpreadsheetIcon,
   Loader2Icon,
+  SparklesIcon,
+  XIcon,
+  ZapIcon,
 } from "lucide-react";
 import * as React from "react";
 
@@ -19,25 +22,56 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CommissionBreakdownCard } from "@/features/products/components/commission-breakdown-card";
+import { useCompanionExtension } from "@/features/products/hooks/use-companion-extension";
 import type { RawImportRow } from "@/features/products/types";
 
 interface ImportPreviewProps {
   fileName: string;
   rows: RawImportRow[];
-  onConfirm: () => Promise<void>;
+  onConfirm: (rowsToConfirm: RawImportRow[]) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
 }
 
 export function ImportPreview({
   fileName,
-  rows,
+  rows: initialRows,
   onConfirm,
   onCancel,
   isLoading,
 }: ImportPreviewProps) {
+  const [rows, setRows] = React.useState<RawImportRow[]>(initialRows);
+  const [selectedRowForDetail, setSelectedRowForDetail] = React.useState<RawImportRow | null>(null);
   const totalRows = rows.length;
   const previewRows = rows.slice(0, 10);
+
+  const {
+    isExtensionInstalled,
+    isEnriching,
+    progress,
+    enrichRows,
+    enrichError,
+  } = useCompanionExtension();
+
+  // Hitung berapa produk yang sudah memiliki link affiliate & komisi
+  const enrichedCount = React.useMemo(() => {
+    return rows.filter((r) => !!(r.affiliate_link || r.affiliate_url)).length;
+  }, [rows]);
+
+  const hasUnenriched = enrichedCount < totalRows;
+
+  const handleEnrichNow = async () => {
+    try {
+      // Deteksi region dari data URL produk (default ke ID jika tidak ada)
+      const hasMy = rows.some((r) => String(r.product_url || r.url || "").includes(".com.my"));
+      const targetRegion = hasMy ? "MY" : "ID";
+      const result = await enrichRows(rows, targetRegion);
+      setRows(result);
+    } catch (err) {
+      console.error("Gagal enrich di preview:", err);
+    }
+  };
 
   // Compute "-" counts per column
   const dashStats = React.useMemo(() => {
@@ -70,6 +104,56 @@ export function ImportPreview({
 
   return (
     <div className="space-y-6">
+      {/* Modal Rincian Komisi (Shopee Live, Sosmed, Video, Xtra) */}
+      {selectedRowForDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md rounded-2xl bg-card p-5 shadow-2xl border border-border space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground line-clamp-1">
+                  {String(selectedRowForDetail.product_name ?? "Detail Komisi")}
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Rincian komisi per jenis platform Shopee Affiliate
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedRowForDetail(null)}
+                className="size-7 p-0 rounded-full hover:bg-muted"
+              >
+                <XIcon className="size-4" />
+              </Button>
+            </div>
+
+            <CommissionBreakdownCard
+              commissionLiveRate={selectedRowForDetail.commission_live_rate || selectedRowForDetail.commission_rate}
+              commissionLiveAmount={selectedRowForDetail.commission_live_amount || selectedRowForDetail.commission_amount}
+              commissionSocialRate={selectedRowForDetail.commission_social_rate}
+              commissionSocialAmount={selectedRowForDetail.commission_social_amount}
+              commissionVideoRate={selectedRowForDetail.commission_video_rate}
+              commissionVideoAmount={selectedRowForDetail.commission_video_amount}
+              hasKomisiXtra={Boolean(selectedRowForDetail.has_komisi_xtra || selectedRowForDetail.komisi_xtra_rate)}
+              komisiXtraRate={selectedRowForDetail.komisi_xtra_rate}
+              komisiXtraAmount={selectedRowForDetail.komisi_xtra_amount}
+            />
+
+            <div className="flex justify-end pt-1">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setSelectedRowForDetail(null)}
+                className="bg-primary text-primary-foreground text-xs"
+              >
+                Tutup
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Info */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-border/70 bg-card p-5 shadow-xs">
         <div className="flex items-center gap-3">
@@ -77,11 +161,20 @@ export function ImportPreview({
             <FileSpreadsheetIcon className="size-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold text-foreground">{fileName}</h3>
               <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
                 {totalRows} baris terdeteksi
               </span>
+              {enrichedCount > 0 ? (
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                  <ZapIcon className="size-3" /> {enrichedCount} / {totalRows} terisi link & komisi
+                </span>
+              ) : (
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+                  Belum ada komisi & link
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               Menampilkan preview 10 baris pertama sebelum proses import ke database.
@@ -89,13 +182,28 @@ export function ImportPreview({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Tombol enrich manual jika extension aktif dan ada baris belum ter-enrich */}
+          {isExtensionInstalled && hasUnenriched && !isEnriching && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleEnrichNow}
+              disabled={isLoading || isEnriching}
+              className="border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+            >
+              <SparklesIcon className="size-3.5 mr-1.5 text-emerald-600 dark:text-emerald-400" />
+              Lengkapi Komisi & Link
+            </Button>
+          )}
+
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={onCancel}
-            disabled={isLoading}
+            disabled={isLoading || isEnriching}
           >
             <ArrowLeftIcon className="size-4 mr-1.5" />
             Ganti File
@@ -103,8 +211,8 @@ export function ImportPreview({
           <Button
             type="button"
             size="sm"
-            onClick={onConfirm}
-            disabled={isLoading}
+            onClick={() => onConfirm(rows)}
+            disabled={isLoading || isEnriching}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {isLoading ? (
@@ -121,6 +229,38 @@ export function ImportPreview({
           </Button>
         </div>
       </div>
+
+      {/* Enrichment Progress if running in preview */}
+      {isEnriching && progress && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 font-medium text-foreground truncate max-w-[70%]">
+              <Loader2Icon className="size-4 animate-spin text-primary shrink-0" />
+              <span className="truncate">
+                {progress.currentProduct
+                  ? progress.currentProduct
+                  : "Memperkaya data komisi 3 platform & link affiliate..."}
+              </span>
+            </div>
+            <span className="font-mono font-semibold text-primary shrink-0">
+              {progress.percentage}% ({progress.completed} / {progress.total})
+            </span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-primary/20">
+            <div
+              className="h-full bg-primary transition-all duration-300 ease-out"
+              style={{ width: `${progress.percentage}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {enrichError && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+          <AlertCircleIcon className="size-4 shrink-0" />
+          <span>{enrichError}</span>
+        </div>
+      )}
 
       {/* Dash "-" Stats summary */}
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
@@ -150,7 +290,7 @@ export function ImportPreview({
             Preview 10 Baris Pertama
           </span>
           <span className="text-xs text-muted-foreground">
-            Format: snake_case extension
+            Format: Shopdora + Shopee Affiliate (Live, Sosmed, Video, Xtra)
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -159,9 +299,10 @@ export function ImportPreview({
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-12 text-xs">#</TableHead>
                 <TableHead className="text-xs">Product ID</TableHead>
-                <TableHead className="text-xs min-w-[220px]">Nama Produk</TableHead>
-                <TableHead className="text-xs min-w-[140px]">Shopee URL</TableHead>
-                <TableHead className="text-xs">Toko</TableHead>
+                <TableHead className="text-xs min-w-[200px]">Nama Produk</TableHead>
+                <TableHead className="text-xs">Komisi Live / XTRA</TableHead>
+                <TableHead className="text-xs">Est. Komisi</TableHead>
+                <TableHead className="text-xs min-w-[140px]">Link Affiliate</TableHead>
                 <TableHead className="text-xs">Sales 30d</TableHead>
                 <TableHead className="text-xs">Growth 30d</TableHead>
                 <TableHead className="text-xs">GMV 30d</TableHead>
@@ -171,6 +312,11 @@ export function ImportPreview({
             <TableBody>
               {previewRows.map((row, idx) => {
                 const productUrl = String(row.product_url ?? row.url ?? "");
+                const affiliateLink = row.affiliate_link || row.affiliate_url;
+                const rate = row.commission_live_rate || row.commission_rate;
+                const amount = row.commission_live_amount || row.commission_amount;
+                const hasXtra = Boolean(row.has_komisi_xtra || row.komisi_xtra_rate);
+
                 return (
                   <TableRow key={idx} className="text-xs">
                     <TableCell className="font-mono text-muted-foreground">
@@ -196,24 +342,63 @@ export function ImportPreview({
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="max-w-[180px]">
-                      {productUrl ? (
-                        <a
-                          href={productUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline truncate max-w-full"
-                          title={productUrl}
-                        >
-                          <ExternalLinkIcon className="size-3 shrink-0" />
-                          <span className="truncate">{productUrl.replace(/^https?:\/\//, "")}</span>
-                        </a>
+
+                    {/* Komisi Rate & Rincian trigger */}
+                    <TableCell className="font-mono">
+                      {rate ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              {String(rate).includes("%") ? String(rate) : `${rate}%`}
+                            </span>
+                            {hasXtra && (
+                              <span className="rounded bg-rose-500/10 px-1 py-0.2 text-[9px] font-black italic text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                                XTRA
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRowForDetail(row)}
+                            className="text-[10px] text-primary hover:underline text-left cursor-pointer font-sans"
+                          >
+                            Lihat Rincian
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {String(row.seller_name ?? "-")}
+
+                    {/* Est Komisi */}
+                    <TableCell className="font-mono">
+                      {amount ? (
+                        <span className="text-orange-600 dark:text-orange-400 font-semibold">
+                          {String(amount)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+
+                    {/* Link Affiliate */}
+                    <TableCell className="max-w-[160px]">
+                      {affiliateLink ? (
+                        <a
+                          href={String(affiliateLink)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline truncate max-w-full font-medium"
+                          title={String(affiliateLink)}
+                        >
+                          <ExternalLinkIcon className="size-3 shrink-0" />
+                          <span className="truncate">{String(affiliateLink).replace(/^https?:\/\//, "")}</span>
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-[11px] italic">
+                          Belum ada
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="font-mono">
                       {String(row.sales_30d ?? "-")}

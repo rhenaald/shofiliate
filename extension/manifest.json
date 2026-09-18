@@ -1,0 +1,79 @@
+{
+  "manifest_version": 3,
+  "name": "Shofiliate Companion - Shopee Affiliate Auto-Enricher",
+  "version": "1.0.0",
+  "description": "Ekstensi pendamping Shofiliate untuk auto-enrichment komisi dan link Shopee Affiliate.",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "tabs",
+    "scripting",
+    "clipboardRead",
+    "clipboardWrite",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://*.shopee.co.id/*",
+    "https://*.shopee.com.my/*",
+    "https://*.shopee.sg/*",
+    "https://*.shopee.ph/*",
+    "https://*.shopee.vn/*",
+    "https://*.shopee.co.th/*",
+    "http://localhost/*",
+    "http://localhost:*/*",
+    "http://127.0.0.1/*",
+    "http://127.0.0.1:*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://localhost:*/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://affiliate.shopee.co.id/*",
+        "https://affiliate.shopee.com.my/*",
+        "https://affiliate.shopee.sg/*",
+        "https://affiliate.shopee.vn/*",
+        "https://affiliate.shopee.ph/*",
+        "https://affiliate.shopee.co.th/*"
+      ],
+      "js": [
+        "shopee-page-interceptor.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://affiliate.shopee.co.id/*",
+        "https://affiliate.shopee.com.my/*",
+        "https://affiliate.shopee.sg/*",
+        "https://affiliate.shopee.vn/*",
+        "https://affiliate.shopee.ph/*",
+        "https://affiliate.shopee.co.th/*"
+      ],
+      "js": [
+        "shopee-affiliate-scraper.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Shofiliate Companion"
+  }
+}

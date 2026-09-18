@@ -14,6 +14,19 @@ export type RawImportRow = {
   total_gmv?: string | number | null;
   product_url?: string | null;
   url?: string | null;
+  commission_rate?: string | number | null;
+  commission_amount?: string | number | null;
+  commission_live_rate?: string | number | null;
+  commission_live_amount?: string | number | null;
+  commission_social_rate?: string | number | null;
+  commission_social_amount?: string | number | null;
+  commission_video_rate?: string | number | null;
+  commission_video_amount?: string | number | null;
+  has_komisi_xtra?: boolean | string | null;
+  komisi_xtra_rate?: string | number | null;
+  komisi_xtra_amount?: string | number | null;
+  affiliate_link?: string | null;
+  affiliate_url?: string | null;
   [key: string]: unknown;
 };
 
@@ -38,6 +51,18 @@ export type ParsedProductRow = {
   gmv30d: number;
   historicalSold: number;
   totalGmv: number;
+  commissionRate: number | null;
+  commissionAmount: number | null;
+  commissionLiveRate: number | null;
+  commissionLiveAmount: number | null;
+  commissionSocialRate: number | null;
+  commissionSocialAmount: number | null;
+  commissionVideoRate: number | null;
+  commissionVideoAmount: number | null;
+  hasKomisiXtra: boolean;
+  komisiXtraRate: number | null;
+  komisiXtraAmount: number | null;
+  affiliateUrl: string | null;
 };
 
 export type ImportRowError = {
