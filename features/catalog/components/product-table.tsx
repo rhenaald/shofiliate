@@ -24,10 +24,11 @@ import * as React from "react";
 
 import { Copy, Pin, Download, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 
+import { BulkActionBar } from "@/components/shared/data-table/bulk-action-bar";
+import { DataTableViewOptions } from "@/components/shared/data-table/view-options";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -37,8 +38,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
-import { createProductColumns } from "@/features/catalog/components/product-columns";
-import type { CatalogRow, CatalogView } from "@/features/catalog/types";
+import {
+  SORTABLE_COLUMNS,
+  createProductColumns,
+} from "@/features/catalog/components/product-columns";
+import { COLUMN_SORT_ID, type CatalogRow, type CatalogView } from "@/features/catalog/types";
 import type { CatalogSortId } from "@/features/catalog/schemas";
 
 const features = tableFeatures({
@@ -64,6 +68,8 @@ interface ProductTableProps {
   sortId: CatalogSortId | null;
   sortDir: "asc" | "desc";
   onSortChange: (columnId: string) => void;
+  onSelectDirection: (dir: "asc" | "desc") => void;
+  onClearSort: () => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onClearFilters: () => void;
@@ -79,6 +85,8 @@ export function ProductTable({
   sortId,
   sortDir,
   onSortChange,
+  onSelectDirection,
+  onClearSort,
   onPageChange,
   onPageSizeChange,
   onClearFilters,
@@ -149,55 +157,45 @@ export function ProductTable({
     setJumpKey(null);
   }
 
+  const bulkActions = React.useMemo(
+    () => [
+      {
+        id: "pin",
+        label: "Pin",
+        icon: Pin,
+        onClick: () => toast.add({ title: "Pin — coming in SH-9" }),
+      },
+      {
+        id: "copy-link",
+        label: "Copy link",
+        icon: Copy,
+        onClick: () => toast.add({ title: "Copy link — coming in SH-6" }),
+      },
+      {
+        id: "export",
+        label: "Export",
+        icon: Download,
+        onClick: () => toast.add({ title: "Export — coming in SH-6" }),
+      },
+    ],
+    [],
+  );
+
+  const activeColumnId =
+    Object.keys(COLUMN_SORT_ID).find((c) => COLUMN_SORT_ID[c] === sortId) ?? null;
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
-        <span className="text-sm text-muted-foreground">{selectedCount} selected</span>
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={selectedCount === 0} onClick={() => toast.add({ title: "Pin — coming in SH-9" })}>
-            <Pin className="size-3.5" />
-            Pin
-          </Button>
-          <Button variant="outline" size="sm" disabled={selectedCount === 0} onClick={() => toast.add({ title: "Copy link — coming in SH-6" })}>
-            <Copy className="size-3.5" />
-            Copy link
-          </Button>
-          <Button variant="outline" size="sm" disabled={selectedCount === 0} onClick={() => toast.add({ title: "Export — coming in SH-6" })}>
-            <Download className="size-3.5" />
-            Export
-          </Button>
-          <Button variant="ghost" size="sm" disabled={selectedCount === 0} onClick={() => table.resetRowSelection()}>
-            Clear
-          </Button>
-        </div>
-      </div>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm">
-                  Columns
-                  <ChevronDown className="size-3.5" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="max-h-64 w-56">
-              {table
-                .getAllColumns()
-                .filter((col) => col.getCanHide())
-                .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(v) => col.toggleVisibility(!!v)}
-                  >
-                    {col.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DataTableViewOptions
+          table={table}
+          sortableColumns={SORTABLE_COLUMNS}
+          activeColumnId={activeColumnId}
+          direction={sortDir}
+          onSelectColumn={onSortChange}
+          onSelectDirection={onSelectDirection}
+          onClearSort={onClearSort}
+        />
       </div>
       <div className="overflow-x-auto rounded-md border">
         <Table>
@@ -353,6 +351,7 @@ export function ProductTable({
           </Button>
         </div>
       </div>
+      <BulkActionBar selectedCount={selectedCount} actions={bulkActions} onClear={() => table.resetRowSelection()} />
     </div>
   );
 }
