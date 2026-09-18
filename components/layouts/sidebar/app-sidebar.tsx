@@ -39,6 +39,18 @@ const data = {
   },
   navMain: [
     {
+      title: "Catalog",
+      url: "/dashboard/catalog",
+      icon: <PackageIcon />,
+      isActive: true,
+      items: [
+        {
+          title: "Katalog",
+          url: "/dashboard/catalog",
+        },
+      ],
+    },
+    {
       title: "Products",
       url: "/dashboard/products",
       icon: <PackageIcon />,
