@@ -156,8 +156,14 @@ export function toDTO(r: CatalogSqlRow): CatalogProductDTO {
     batchId: r.batchId,
     affiliateUrl: r.affiliateUrl,
     komisiXtraRate: r.komisiXtraRate,
-    commissionLiveAmount: r.commissionLiveAmount ? Number(r.commissionLiveAmount) : null,
-    commissionSocialAmount: r.commissionSocialAmount ? Number(r.commissionSocialAmount) : null,
-    commissionVideoAmount: r.commissionVideoAmount ? Number(r.commissionVideoAmount) : null,
+    commissionLiveAmount: r.commissionLiveAmount
+      ? Number(r.commissionLiveAmount)
+      : null,
+    commissionSocialAmount: r.commissionSocialAmount
+      ? Number(r.commissionSocialAmount)
+      : null,
+    commissionVideoAmount: r.commissionVideoAmount
+      ? Number(r.commissionVideoAmount)
+      : null,
   };
 }

@@ -1,7 +1,18 @@
 "use client";
 
-import { sortFn_alphanumeric, sortFn_text, type ColumnDef } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Copy, ExternalLink, Pin } from "lucide-react";
+import {
+  sortFn_alphanumeric,
+  sortFn_text,
+  type ColumnDef,
+} from "@tanstack/react-table";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Copy,
+  ExternalLink,
+  Pin,
+} from "lucide-react";
 
 import type { DataTableFeatures } from "@/components/data-table";
 import {
@@ -12,7 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { toast } from "@/components/ui/toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { CatalogRow, CatalogView } from "@/features/catalog/types";
 import { COLUMN_SORT_ID } from "@/features/catalog/types";
 import type { CatalogSortId } from "@/features/catalog/schemas";
@@ -34,8 +49,14 @@ interface SortHeaderProps {
   align?: "left" | "right";
 }
 
-function SortHeader({ label, active, onToggle, align = "left" }: SortHeaderProps) {
-  const Icon = active === "asc" ? ArrowUp : active === "desc" ? ArrowDown : ArrowUpDown;
+function SortHeader({
+  label,
+  active,
+  onToggle,
+  align = "left",
+}: SortHeaderProps) {
+  const Icon =
+    active === "asc" ? ArrowUp : active === "desc" ? ArrowDown : ArrowUpDown;
   return (
     <Button
       variant="ghost"
@@ -73,7 +94,11 @@ export function createProductColumns(
   view: CatalogView,
   opts: ProductColumnSort,
 ): ColumnDef<DataTableFeatures, CatalogRow>[] {
-  const header = (columnId: string, label: string, align: "left" | "right" = "left") => ({
+  const header = (
+    columnId: string,
+    label: string,
+    align: "left" | "right" = "left",
+  ) => ({
     header: () => (
       <SortHeader
         label={label}
@@ -181,6 +206,17 @@ export function createProductColumns(
       sortFn: sortFn_alphanumeric,
     },
     {
+      id: "likes",
+      accessorKey: "likes",
+      ...header("likes", "Likes", "right"),
+      cell: ({ row }) => (
+        <span className="block text-right tabular-nums">
+          {row.original.likes.toLocaleString("en-US")}
+        </span>
+      ),
+      sortFn: sortFn_alphanumeric,
+    },
+    {
       id: "totalSales",
       accessorKey: "totalSales",
       ...header("totalSales", "Sold", "right"),
@@ -206,25 +242,24 @@ export function createProductColumns(
         const hasUrl = !!url && url.trim().length > 0;
 
         return (
-          <ButtonGroup className="gap-1">
+          <ButtonGroup>
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="inline-flex">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      disabled={!hasUrl}
-                      aria-label="Salin link affiliate"
-                      onClick={() => {
-                        if (!hasUrl) return;
-                        navigator.clipboard.writeText(url);
-                        toast.add({ title: "Link affiliate disalin" });
-                      }}
-                    >
-                      <Copy className="size-3.5" />
-                    </Button>
-                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    disabled={!hasUrl}
+                    className="disabled:pointer-events-auto"
+                    aria-label="Salin link affiliate"
+                    onClick={() => {
+                      if (!hasUrl) return;
+                      navigator.clipboard.writeText(url);
+                      toast.add({ title: "Link affiliate disalin" });
+                    }}
+                  >
+                    <Copy className="size-3.5" />
+                  </Button>
                 }
               />
               <TooltipContent>
@@ -235,20 +270,19 @@ export function createProductColumns(
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="inline-flex">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      disabled={!hasUrl}
-                      aria-label="Buka link affiliate"
-                      onClick={() => {
-                        if (!hasUrl) return;
-                        window.open(url, "_blank", "noopener,noreferrer");
-                      }}
-                    >
-                      <ExternalLink className="size-3.5" />
-                    </Button>
-                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    disabled={!hasUrl}
+                    className="disabled:pointer-events-auto"
+                    aria-label="Buka link affiliate"
+                    onClick={() => {
+                      if (!hasUrl) return;
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    }}
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </Button>
                 }
               />
               <TooltipContent>
@@ -280,18 +314,9 @@ export function createProductColumns(
       accessorKey: "region",
       header: "Region",
       enableSorting: false,
-      cell: ({ row }) => <Badge variant="secondary">{row.original.region}</Badge>,
-    },
-    {
-      id: "likes",
-      accessorKey: "likes",
-      ...header("likes", "Likes", "right"),
       cell: ({ row }) => (
-        <span className="block text-right tabular-nums">
-          {row.original.likes.toLocaleString("en-US")}
-        </span>
+        <Badge variant="secondary">{row.original.region}</Badge>
       ),
-      sortFn: sortFn_alphanumeric,
     },
     {
       id: "sales30d",
@@ -318,7 +343,9 @@ export function createProductColumns(
         const g = row.original.growth30d;
         return (
           <div className="flex justify-end">
-            <Badge variant={g > 0 ? "success" : g < 0 ? "destructive" : "secondary"}>
+            <Badge
+              variant={g > 0 ? "success" : g < 0 ? "destructive" : "secondary"}
+            >
               {formatGrowth(g)}
             </Badge>
           </div>
@@ -355,7 +382,8 @@ export function createProductColumns(
           label: "Lihat di Shopee",
           icon: ExternalLink,
           onSelect: () => {
-            if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+            if (data.url)
+              window.open(data.url, "_blank", "noopener,noreferrer");
           },
         },
         {
@@ -367,7 +395,8 @@ export function createProductColumns(
         {
           id: "fix-region",
           label: "Koreksi region",
-          onSelect: () => toast.add({ title: "Koreksi region — coming in SH-8" }),
+          onSelect: () =>
+            toast.add({ title: "Koreksi region — coming in SH-8" }),
         },
       ],
     }),
@@ -376,8 +405,8 @@ export function createProductColumns(
 
 export const SORTABLE_COLUMNS = [
   { id: "productName", label: "Product Name" },
-  { id: "totalSales", label: "Sold" },
   { id: "likes", label: "Likes" },
+  { id: "totalSales", label: "Sold" },
   { id: "sales30d", label: "Sales 30d" },
   { id: "growth30d", label: "Growth 30d" },
   { id: "gmv30d", label: "GMV 30d" },

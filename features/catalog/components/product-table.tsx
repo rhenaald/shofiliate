@@ -22,11 +22,21 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
-import { Copy, Pin, Download, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
+import {
+  Copy,
+  Pin,
+  Download,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
+} from "lucide-react";
 
 import { BulkActionBar } from "@/components/shared/data-table/bulk-action-bar";
 import { DataTableViewOptions } from "@/components/shared/data-table/view-options";
 import { Button } from "@/components/ui/button";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,13 +46,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
 import {
   SORTABLE_COLUMNS,
   createProductColumns,
 } from "@/features/catalog/components/product-columns";
-import { COLUMN_SORT_ID, type CatalogRow, type CatalogView } from "@/features/catalog/types";
+import {
+  COLUMN_SORT_ID,
+  type CatalogRow,
+  type CatalogView,
+} from "@/features/catalog/types";
 import type { CatalogSortId } from "@/features/catalog/schemas";
 
 const features = tableFeatures({
@@ -99,16 +120,18 @@ export function ProductTable({
   // Urutan baris adalah otoritas server (sort per view / ?sort&dir).
   // Sorting interaktif lokal dimatikan agar tidak menyesatkan (hanya 1 halaman terlihat).
   const [sorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({
-    pin: false,
-    region: false,
-    likes: false,
-    sales30d: false,
-    growth30d: false,
-    gmv30d: false,
-    listedOn: false,
-  });
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    [],
+  );
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<ColumnVisibilityState>({
+      pin: false,
+      region: false,
+      sales30d: false,
+      growth30d: false,
+      gmv30d: false,
+      listedOn: false,
+    });
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
   const table = useTable({
@@ -146,7 +169,9 @@ export function ProductTable({
 
   function pageItems(current: number, total: number): (number | "ellipsis")[] {
     if (total <= 7) return Array.from({ length: total }, (_, i) => i);
-    const pages = [...new Set([0, total - 1, current - 1, current, current + 1])]
+    const pages = [
+      ...new Set([0, total - 1, current - 1, current, current + 1]),
+    ]
       .filter((p) => p >= 0 && p < total)
       .sort((a, b) => a - b);
     const out: (number | "ellipsis")[] = [];
@@ -161,7 +186,10 @@ export function ProductTable({
 
   function goJump() {
     const n = Number.parseInt(jumpValue, 10);
-    if (Number.isFinite(n)) table.setPageIndex(Math.min(Math.max(n - 1, 0), Math.max(pageCount - 1, 0)));
+    if (Number.isFinite(n))
+      table.setPageIndex(
+        Math.min(Math.max(n - 1, 0), Math.max(pageCount - 1, 0)),
+      );
     setJumpKey(null);
   }
 
@@ -190,7 +218,8 @@ export function ProductTable({
   );
 
   const activeColumnId =
-    Object.keys(COLUMN_SORT_ID).find((c) => COLUMN_SORT_ID[c] === sortId) ?? null;
+    Object.keys(COLUMN_SORT_ID).find((c) => COLUMN_SORT_ID[c] === sortId) ??
+    null;
 
   return (
     <div className="space-y-4">
@@ -205,17 +234,23 @@ export function ProductTable({
           onClearSort={onClearSort}
         />
       </div>
-      <div className="overflow-x-auto rounded-md border">
-        <Table>
+      <ScrollArea className="w-full rounded-md border">
+        <Table containerClassName="overflow-visible" className="w-full min-w-max">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={header.column.id === "select" ? "sticky left-0 z-10 bg-background" : undefined}
+                    className={
+                      header.column.id === "select"
+                        ? "sticky left-0 z-10 bg-background"
+                        : undefined
+                    }
                   >
-                    {header.isPlaceholder ? null : <table.FlexRender header={header} />}
+                    {header.isPlaceholder ? null : (
+                      <table.FlexRender header={header} />
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -232,11 +267,18 @@ export function ProductTable({
               ))
             ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className={cell.column.id === "select" ? "sticky left-0 z-10 bg-background" : undefined}
+                      className={
+                        cell.column.id === "select"
+                          ? "sticky left-0 z-10 bg-background"
+                          : undefined
+                      }
                     >
                       <table.FlexRender cell={cell} />
                     </TableCell>
@@ -245,7 +287,10 @@ export function ProductTable({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
                   <div className="flex flex-col items-center gap-2 py-6">
                     <p>No results.</p>
                     <Button
@@ -264,12 +309,15 @@ export function ProductTable({
             )}
           </TableBody>
         </Table>
-      </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length === 0 ? 0 : (page - 1) * pageSize + 1}–
-          {(page - 1) * pageSize + table.getRowModel().rows.length} of{" "}
-          {total}
+          Showing{" "}
+          {table.getRowModel().rows.length === 0
+            ? 0
+            : (page - 1) * pageSize + 1}
+          –{(page - 1) * pageSize + table.getRowModel().rows.length} of {total}
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -294,11 +342,23 @@ export function ProductTable({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="ml-auto flex flex-wrap items-center gap-1">
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.setPageIndex(0)}
+            disabled={!table.getCanPreviousPage()}
+          >
             <ChevronsLeft className="size-4" />
             <span className="sr-only">First page</span>
           </Button>
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
             <ChevronLeft className="size-4" />
             <span className="sr-only">Previous page</span>
           </Button>
@@ -317,7 +377,12 @@ export function ProductTable({
                     aria-label="Go to page number"
                     className="h-8 w-16"
                   />
-                  <Button variant="outline" size="sm" className="h-8" onClick={goJump}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={goJump}
+                  >
                     Go
                   </Button>
                 </span>
@@ -349,17 +414,33 @@ export function ProductTable({
               </Button>
             ),
           )}
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
             <ChevronRight className="size-4" />
             <span className="sr-only">Next page</span>
           </Button>
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.setPageIndex(table.getPageCount() - 1)} disabled={!table.getCanNextPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+            disabled={!table.getCanNextPage()}
+          >
             <ChevronsRight className="size-4" />
             <span className="sr-only">Last page</span>
           </Button>
         </div>
       </div>
-      <BulkActionBar selectedCount={selectedCount} actions={bulkActions} onClear={() => table.resetRowSelection()} />
+      <BulkActionBar
+        selectedCount={selectedCount}
+        actions={bulkActions}
+        onClear={() => table.resetRowSelection()}
+      />
     </div>
   );
 }
