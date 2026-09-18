@@ -61,33 +61,43 @@ export function DataTableViewOptions({
           }
         />
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>Direction</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={direction}
             onValueChange={(v) => onSelectDirection(v as "asc" | "desc")}
           >
-            <DropdownMenuRadioItem value="asc" disabled={activeColumnId === null}>
+            <DropdownMenuLabel>Direction</DropdownMenuLabel>
+            <DropdownMenuRadioItem
+              value="asc"
+              disabled={activeColumnId === null}
+            >
               Ascending
             </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="desc" disabled={activeColumnId === null}>
+            <DropdownMenuRadioItem
+              value="desc"
+              disabled={activeColumnId === null}
+            >
               Descending
             </DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
+
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+
           <DropdownMenuRadioGroup
             value={activeColumnId ?? ""}
             onValueChange={(v) => {
               if (v) onSelectColumn(v);
             }}
           >
+            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
             {sortableColumns.map((col) => (
               <DropdownMenuRadioItem key={col.id} value={col.id}>
                 {col.label}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
+
           <DropdownMenuSeparator />
+
           <DropdownMenuItem onClick={onClearSort}>Clear sort</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
