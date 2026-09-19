@@ -31,6 +31,31 @@ interface ImportPreviewProps {
   isLoading: boolean;
 }
 
+function formatCommissionAmt(val: unknown, row: RawImportRow): string {
+  if (val === null || val === undefined || val === "" || val === 0) return "-";
+  if (typeof val === "number") {
+    const gmv = String(row.gmv_30d || "");
+    const url = String(row.product_url || row.url || "");
+    if (gmv.startsWith("RM") || url.includes(".com.my")) {
+      return `RM ${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (gmv.startsWith("S$") || url.includes(".sg")) {
+      return `S$ ${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (gmv.startsWith("฿") || url.includes(".co.th")) {
+      return `฿ ${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (gmv.startsWith("₱") || url.includes(".ph")) {
+      return `₱ ${val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (gmv.startsWith("₫") || url.includes(".vn")) {
+      return `₫ ${val.toLocaleString("id-ID")}`;
+    }
+    return `Rp ${val.toLocaleString("id-ID")}`;
+  }
+  return String(val);
+}
+
 export function ImportPreview({
   fileName,
   rows: initialRows,
@@ -338,35 +363,19 @@ export function ImportPreview({
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-muted-foreground font-sans text-[10px]">Live:</span>
                             <span className="font-semibold text-orange-600 dark:text-orange-400">
-                              {row.commission_live_amount
-                                ? typeof row.commission_live_amount === "number"
-                                  ? `Rp ${row.commission_live_amount.toLocaleString("id-ID")}`
-                                  : String(row.commission_live_amount)
-                                : amount
-                                ? typeof amount === "number"
-                                  ? `Rp ${amount.toLocaleString("id-ID")}`
-                                  : String(amount)
-                                : "-"}
+                              {formatCommissionAmt(row.commission_live_amount ?? amount, row)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-muted-foreground font-sans text-[10px]">Video:</span>
                             <span className="text-foreground">
-                              {row.commission_video_amount
-                                ? typeof row.commission_video_amount === "number"
-                                  ? `Rp ${row.commission_video_amount.toLocaleString("id-ID")}`
-                                  : String(row.commission_video_amount)
-                                : "-"}
+                              {formatCommissionAmt(row.commission_video_amount, row)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-muted-foreground font-sans text-[10px]">Sosmed:</span>
                             <span className="text-foreground">
-                              {row.commission_social_amount
-                                ? typeof row.commission_social_amount === "number"
-                                  ? `Rp ${row.commission_social_amount.toLocaleString("id-ID")}`
-                                  : String(row.commission_social_amount)
-                                : "-"}
+                              {formatCommissionAmt(row.commission_social_amount, row)}
                             </span>
                           </div>
                         </div>

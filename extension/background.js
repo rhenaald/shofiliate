@@ -557,9 +557,116 @@ async function runAutomateInPage(targetItemId) {
   if (window.location.pathname.includes("/login") || window.location.href.includes("login")) {
     return {
       error: "NOT_LOGGED_IN",
-      message: "Akun Shopee Affiliate Anda belum login di browser Chrome. Silakan buka affiliate.shopee.co.id dan login terlebih dahulu.",
+      message: "Akun Shopee Affiliate Anda belum login di browser Chrome. Silakan buka affiliate Shopee sesuai negara Anda dan login terlebih dahulu.",
     };
   }
+
+  // Helper fungsi untuk mengenali tombol "Dapatkan Pautan" / "Buat Link" / "Get Link" di berbagai bahasa
+  const isGetLinkText = (text) => {
+    if (!text) return false;
+    const t = text.trim().toLowerCase();
+    if (t.includes("shofiliate") || t.length > 35) return false;
+    return (
+      // Malay (MY): Dapatkan Pautan, Jana Pautan, Pautan Tawaran
+      t === "dapatkan pautan" ||
+      t.includes("dapatkan pautan") ||
+      t.includes("pautan tawaran") ||
+      t.includes("jana pautan") ||
+      // Indonesia (ID): Buat Link, Dapatkan Link, Dapatkan Tautan, Buat Tautan
+      t === "buat link" ||
+      t.includes("buat link") ||
+      t === "dapatkan link" ||
+      t.includes("dapatkan link") ||
+      t === "dapatkan tautan" ||
+      t.includes("dapatkan tautan") ||
+      t === "buat tautan" ||
+      t.includes("buat tautan") ||
+      // English (SG, MY, PH, Global): Get Link, Get offer link, Generate Link, Custom Link
+      t === "get link" ||
+      t.includes("get link") ||
+      t === "get offer link" ||
+      t.includes("get offer link") ||
+      t === "generate link" ||
+      t === "custom link" ||
+      // Thailand (TH)
+      t.includes("รับลิงก์") ||
+      t.includes("สร้างลิงก์") ||
+      t.includes("แชร์ลิงก์") ||
+      // Vietnam (VN)
+      t.includes("lấy link") ||
+      t.includes("tạo link") ||
+      t.includes("chia sẻ link") ||
+      // Chinese (TW, SG, MY, CN)
+      t.includes("获取链接") ||
+      t.includes("取得連結") ||
+      t.includes("生成链接") ||
+      t.includes("產生連結") ||
+      // Portuguese (BR)
+      t.includes("obter link") ||
+      t.includes("gerar link")
+    );
+  };
+
+  // Helper fungsi untuk mengenali tombol "Salin Pautan" / "Salin Link" / "Copy Link" di berbagai bahasa
+  const isCopyLinkText = (text) => {
+    if (!text) return false;
+    const t = text.trim().toLowerCase();
+    if (t.includes("shofiliate") || t.length > 30) return false;
+    return (
+      // Malay (MY): Salin Pautan, Salin
+      t === "salin pautan" ||
+      t.includes("salin pautan") ||
+      // Indonesia (ID): Salin Link, Salin Tautan, Salin
+      t === "salin link" ||
+      t.includes("salin link") ||
+      t === "salin tautan" ||
+      t.includes("salin tautan") ||
+      t === "salin" ||
+      // English (SG, MY, PH, Global): Copy Link, Copy
+      t === "copy link" ||
+      t.includes("copy link") ||
+      t === "copy" ||
+      // Thailand (TH)
+      t.includes("คัดลอกลิงก์") ||
+      t.includes("คัดลอก") ||
+      // Vietnam (VN)
+      t.includes("sao chép link") ||
+      t.includes("sao chép") ||
+      // Chinese (TW, SG, MY, CN)
+      t.includes("复制链接") ||
+      t.includes("複製連結") ||
+      t.includes("复制") ||
+      t.includes("複製") ||
+      // Portuguese (BR)
+      t.includes("copiar link") ||
+      t.includes("copiar")
+    );
+  };
+
+  // Helper fungsi untuk mengenali tombol Close / Tutup modal di berbagai bahasa
+  const isCloseModalButton = (el) => {
+    if (isOurElement(el)) return false;
+    const t = (el.textContent || el.innerText || "").trim().toLowerCase();
+    const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+    return (
+      t === "batal" ||
+      t === "tutup" ||
+      t === "close" ||
+      t === "cancel" ||
+      t === "tutup pautan" ||
+      t === "ยกเลิก" ||
+      t === "ปิด" ||
+      t === "hủy" ||
+      t === "đóng" ||
+      t === "取消" ||
+      t === "关闭" ||
+      t === "fechar" ||
+      aria === "close" ||
+      aria === "tutup" ||
+      el.className?.includes?.("close") ||
+      el.className?.includes?.("modal-close")
+    );
+  };
 
   // 0.1 Tunggu SPA Shopee merender konten tabel / tombol jika tab baru dimuat (maks 6 detik)
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -567,17 +674,26 @@ async function runAutomateInPage(targetItemId) {
       document.querySelectorAll("button, [role='button'], a.ant-btn, a")
     ).some((el) => {
       if (isOurElement(el)) return false;
-      const t = (el.innerText || el.textContent || "").trim().toLowerCase();
-      return (t === "buat link" || t === "generate link") || (t.startsWith("buat link") && t.length < 20);
+      const t = el.innerText || el.textContent || "";
+      return isGetLinkText(t);
     });
 
     const hasTable = Array.from(document.querySelectorAll("tr, [role='row']")).some(
-      (r) => !isOurElement(r) && (r.textContent || "").includes("Shopee Live")
+      (r) => !isOurElement(r) && (r.textContent || "").toLowerCase().includes("live")
     );
 
-    const hasLihatProduk = Array.from(document.querySelectorAll("a, span")).some(
-      (el) => !isOurElement(el) && (el.textContent || "").trim() === "Lihat Produk"
-    );
+    const hasLihatProduk = Array.from(document.querySelectorAll("a, span")).some((el) => {
+      if (isOurElement(el)) return false;
+      const t = (el.textContent || "").trim().toLowerCase();
+      return (
+        t === "lihat produk" ||
+        t === "view product" ||
+        t === "lihat" ||
+        t === "view" ||
+        t.includes("lihat produk") ||
+        t.includes("view product")
+      );
+    });
 
     if (hasShopeeNativeButton || hasTable || hasLihatProduk) {
       // Tunggu jeda 350ms agar react/vue selesai merender state DOM
@@ -639,13 +755,13 @@ async function runAutomateInPage(targetItemId) {
 
   let capturedLink = scanForShortlink();
 
-  // 3. Jika belum ada shortlink, klik tombol "Buat Link" Shopee asli untuk memunculkan modal
+  // 3. Jika belum ada shortlink, klik tombol "Buat Link" / "Dapatkan Pautan" / "Get Link" Shopee asli untuk memunculkan modal
   if (!capturedLink) {
     const allElements = Array.from(document.querySelectorAll("button, [role='button'], a.ant-btn, a"));
     const buatLinkBtn = allElements.find((el) => {
       if (isOurElement(el)) return false;
-      const t = (el.innerText || el.textContent || "").trim().toLowerCase();
-      return (t === "buat link" || t === "generate link") || (t.startsWith("buat link") && t.length < 20);
+      const t = el.innerText || el.textContent || "";
+      return isGetLinkText(t);
     });
 
     if (buatLinkBtn) {
@@ -662,12 +778,12 @@ async function runAutomateInPage(targetItemId) {
         await sleep(150);
         capturedLink = scanForShortlink();
 
-        // Cari dan klik tombol "Salin Link" di modal jika muncul
+        // Cari dan klik tombol "Salin Pautan" / "Salin Link" / "Copy Link" di modal jika muncul
         const modalBtns = Array.from(document.querySelectorAll("button, [role='button'], a, div, span"));
         const salinBtn = modalBtns.find((b) => {
           if (isOurElement(b)) return false;
-          const t = (b.textContent || b.innerText || "").trim().toLowerCase();
-          return (t === "salin link" || t === "salin" || t.includes("salin link") || t.includes("copy link")) && t.length < 25;
+          const t = b.textContent || b.innerText || "";
+          return isCopyLinkText(t);
         });
         if (salinBtn) {
           const salinTarget = salinBtn.closest("button") || salinBtn.closest("[role='button']") || salinBtn;
@@ -690,20 +806,7 @@ async function runAutomateInPage(targetItemId) {
           const closeCandidates = Array.from(
             document.querySelectorAll("button, span, i, div, [role='button']")
           );
-          const closeBtn = closeCandidates.find((b) => {
-            if (isOurElement(b)) return false;
-            const t = (b.textContent || "").trim().toLowerCase();
-            const aria = (b.getAttribute("aria-label") || "").toLowerCase();
-            return (
-              t === "batal" ||
-              t === "tutup" ||
-              t === "close" ||
-              t === "cancel" ||
-              aria === "close" ||
-              b.className?.includes?.("close") ||
-              b.className?.includes?.("modal-close")
-            );
-          });
+          const closeBtn = closeCandidates.find((b) => isCloseModalButton(b));
           if (closeBtn) {
             closeBtn.click();
           } else {
@@ -716,26 +819,33 @@ async function runAutomateInPage(targetItemId) {
     }
   }
 
-  // 4. Ekstrak Judul Produk Asli (Wajib menolak teks Shofiliate / Buat Link)
+  // 4. Ekstrak Judul Produk Asli (Wajib menolak teks Shofiliate / Buat Link / Dapatkan Pautan / Get Link)
   let productName = "";
   const allLinks = Array.from(document.querySelectorAll("a, button, span"));
-  const lihatProduk = allLinks.find((el) => !isOurElement(el) && (el.textContent || "").trim() === "Lihat Produk");
+  const lihatProduk = allLinks.find((el) => {
+    if (isOurElement(el)) return false;
+    const t = (el.textContent || "").trim().toLowerCase();
+    return t === "lihat produk" || t === "view product";
+  });
   if (lihatProduk) {
     if (lihatProduk.previousElementSibling && !isOurElement(lihatProduk.previousElementSibling)) {
       const prevTxt = (lihatProduk.previousElementSibling.textContent || "").trim();
-      if (prevTxt && !prevTxt.toLowerCase().includes("buat link") && !prevTxt.toLowerCase().includes("shofiliate")) {
+      if (prevTxt && !isGetLinkText(prevTxt) && !prevTxt.toLowerCase().includes("shofiliate")) {
         productName = prevTxt;
       }
     }
     if (!productName && lihatProduk.parentElement) {
-      const parentTxt = lihatProduk.parentElement.textContent.replace("Lihat Produk", "").trim();
-      if (parentTxt && !parentTxt.toLowerCase().includes("buat link") && !parentTxt.toLowerCase().includes("shofiliate")) {
+      const parentTxt = lihatProduk.parentElement.textContent
+        .replace(/Lihat Produk/i, "")
+        .replace(/View Product/i, "")
+        .trim();
+      if (parentTxt && !isGetLinkText(parentTxt) && !parentTxt.toLowerCase().includes("shofiliate")) {
         productName = parentTxt;
       }
     }
   }
 
-  if (!productName || productName.toLowerCase().includes("buat link") || productName.toLowerCase().includes("shofiliate")) {
+  if (!productName || isGetLinkText(productName) || productName.toLowerCase().includes("shofiliate")) {
     const headings = Array.from(document.querySelectorAll("h1, h2, h3, h4, div, span, p"));
     for (const el of headings) {
       if (isOurElement(el)) continue;
@@ -743,9 +853,13 @@ async function runAutomateInPage(targetItemId) {
       if (
         t.length > 10 &&
         !t.toLowerCase().includes("shofiliate") &&
-        !t.toLowerCase().includes("buat link") &&
+        !isGetLinkText(t) &&
         !t.includes("Rincian Tawaran") &&
         !t.includes("Rincian Komisi") &&
+        !t.includes("Butiran Komisen") &&
+        !t.includes("Butiran Tawaran") &&
+        !t.includes("Offer Details") &&
+        !t.includes("Commission Details") &&
         !t.includes("Penawaran") &&
         !t.includes("Halaman Utama") &&
         !t.includes("Bahasa") &&
@@ -757,16 +871,24 @@ async function runAutomateInPage(targetItemId) {
     }
   }
 
-  // 5. Ekstrak Harga Asli Produk
+  // 5. Ekstrak Harga Asli Produk (Mendukung Rp, RM, S$, dsb)
   let price = 0;
   const allTextElements = Array.from(document.querySelectorAll("*")).filter((el) => {
     if (isOurElement(el)) return false;
-    return el.children.length === 0 && /^Rp\s*[\d.]+/i.test((el.textContent || "").trim());
+    const txt = (el.textContent || "").trim();
+    return el.children.length === 0 && /^(?:Rp|RM|S\$|\$|฿|₱|₫)\s*[\d.,]+/i.test(txt);
   });
   if (allTextElements.length > 0) {
     const pText = allTextElements[0].textContent.trim();
-    const m = pText.match(/Rp\s*([\d.]+)/i);
-    if (m) price = parseFloat(m[1].replace(/\./g, ""));
+    const m = pText.match(/(?:Rp|RM|S\$|\$|฿|₱|₫)\s*([\d.,]+)/i);
+    if (m) {
+      const numStr = m[1].trim();
+      if (numStr.includes(".") && numStr.split(".")[1]?.length === 3) {
+        price = parseFloat(numStr.replace(/\./g, "")) || 0;
+      } else {
+        price = parseFloat(numStr.replace(/,/g, "")) || 0;
+      }
+    }
   }
 
   // 6. Ekstrak Tabel Rincian Komisi (Mendukung 3 Kolom atau 4 Kolom)
@@ -776,7 +898,7 @@ async function runAutomateInPage(targetItemId) {
       if (isOurElement(d)) return false;
       const t = d.textContent || "";
       return (
-        (t.includes("Shopee Live") || t.includes("Media Sosial") || t.includes("Shopee Video")) &&
+        (t.toLowerCase().includes("live") || t.toLowerCase().includes("social") || t.toLowerCase().includes("video")) &&
         d.children.length >= 2 &&
         d.children.length <= 6
       );
@@ -787,7 +909,18 @@ async function runAutomateInPage(targetItemId) {
   let shopeeColIdx = -1;
   let estColIdx = 2;
 
-  const headerRow = allRows.find((r) => (r.textContent || "").includes("Jenis Platform"));
+  const headerRow = allRows.find((r) => {
+    const txt = (r.textContent || "").toLowerCase();
+    return (
+      txt.includes("jenis platform") ||
+      txt.includes("platform type") ||
+      txt.includes("platform") ||
+      txt.includes("ประเภทแพลตฟอร์ม") ||
+      txt.includes("loại nền tảng") ||
+      txt.includes("平台类型") ||
+      txt.includes("平台類型")
+    );
+  });
   if (headerRow) {
     let headerElements = Array.from(
       headerRow.querySelectorAll(":scope > th, :scope > td, :scope > [role='columnheader']")
@@ -799,11 +932,29 @@ async function runAutomateInPage(targetItemId) {
 
     headers.forEach((h, idx) => {
       const lower = h.toLowerCase();
-      if (lower.includes("xtra")) {
+      if (lower.includes("xtra") || lower.includes("extra") || lower.includes("ekstra")) {
         xtraColIdx = idx;
-      } else if (lower.includes("komisi shopee") || lower === "komisi") {
+      } else if (
+        lower.includes("komisi shopee") ||
+        lower.includes("komisen shopee") ||
+        lower.includes("shopee commission") ||
+        lower === "komisi" ||
+        lower === "komisen" ||
+        lower === "commission" ||
+        lower.includes("ค่าคอมมิชชั่น") ||
+        lower.includes("hoa hồng") ||
+        lower.includes("佣金")
+      ) {
         shopeeColIdx = idx;
-      } else if (lower.includes("estimasi")) {
+      } else if (
+        lower.includes("estimasi") ||
+        lower.includes("anggaran") ||
+        lower.includes("estimated") ||
+        lower.includes("est.") ||
+        lower.includes("ประมาณการ") ||
+        lower.includes("ước tính") ||
+        lower.includes("预估")
+      ) {
         estColIdx = idx;
       }
     });
@@ -812,18 +963,31 @@ async function runAutomateInPage(targetItemId) {
   const parseRateAmt = (str) => {
     if (!str) return { rate: 0, amt: 0, raw: "" };
     const rateMatch = str.match(/([\d,.]+)\s*%/);
-    const amtMatch = str.match(/Rp\s*([\d.]+)/i);
+    const amtMatch = str.match(/(?:Rp|RM|S\$|\$|฿|₱|₫)\s*([\d,.]+)/i) || str.match(/([\d,.]+)/);
     const rate = rateMatch ? parseFloat(rateMatch[1].replace(",", ".")) : 0;
-    const amt = amtMatch ? parseFloat(amtMatch[1].replace(/\./g, "")) : 0;
+    let amt = 0;
+    if (amtMatch) {
+      const numStr = amtMatch[1].trim();
+      if (numStr.includes(".") && numStr.split(".")[1]?.length === 3) {
+        amt = parseFloat(numStr.replace(/\./g, "")) || 0;
+      } else {
+        amt = parseFloat(numStr.replace(/,/g, "")) || 0;
+      }
+    }
     return { rate, amt, raw: str };
   };
 
-  const parsePlatformRow = (platformKeyword) => {
-    const row = allRows.find(
-      (r) =>
-        (r.textContent || "").includes(platformKeyword) &&
-        !r.textContent.includes("Jenis Platform")
-    );
+  const parsePlatformRow = (keywords) => {
+    const list = Array.isArray(keywords) ? keywords : [keywords];
+    const row = allRows.find((r) => {
+      const txt = (r.textContent || "").toLowerCase();
+      return list.some((k) => txt.includes(k.toLowerCase())) &&
+        !txt.includes("jenis platform") &&
+        !txt.includes("platform type") &&
+        !txt.includes("ประเภทแพลตฟอร์ม") &&
+        !txt.includes("loại nền tảng") &&
+        !txt.includes("平台类型");
+    });
     if (!row) return null;
 
     let cellElements = Array.from(
@@ -840,7 +1004,7 @@ async function runAutomateInPage(targetItemId) {
     const shopee =
       shopeeColIdx !== -1 && cells[shopeeColIdx]
         ? parseRateAmt(cells[shopeeColIdx])
-        : { rate: 0, amt: 0, raw: "0% (Rp0)" };
+        : { rate: 0, amt: 0, raw: "0%" };
     const est = parseRateAmt(cells[estColIdx] || cells[cells.length - 1] || "");
 
     return {
@@ -852,9 +1016,9 @@ async function runAutomateInPage(targetItemId) {
     };
   };
 
-  const liveData = parsePlatformRow("Shopee Live");
-  const socialData = parsePlatformRow("Media Sosial");
-  const videoData = parsePlatformRow("Shopee Video");
+  const liveData = parsePlatformRow(["Shopee Live", "Live", "Siaran Langsung", "直播"]);
+  const socialData = parsePlatformRow(["Media Sosial", "Social Media", "Social", "Sosmed", "Mạng xã hội", "โซเชียล", "社交媒体", "社群媒體"]);
+  const videoData = parsePlatformRow(["Shopee Video", "Video", "วิดีโอ", "短视频", "短影音"]);
 
   const validShortlink = (capturedLink && !capturedLink.includes("/offer/product_offer/"))
     ? capturedLink

@@ -69,10 +69,23 @@ export function ImportUploader({
         throw new Error("File tidak berisi baris data produk.");
       }
 
+      // Deteksi region dari item di dalam file (default MY jika URL/GMV mengarah ke MY)
+      let detectedRegion: RegionCode = batchRegion;
+      for (const r of parsedRows) {
+        const url = String(r.product_url || r.url || "").toLowerCase();
+        const gmv = String(r.gmv_30d || "");
+        if (url.includes(".com.my") || gmv.startsWith("RM")) { detectedRegion = "MY"; break; }
+        if (url.includes(".sg") || gmv.startsWith("S$")) { detectedRegion = "SG"; break; }
+        if (url.includes(".co.id") || gmv.startsWith("Rp")) { detectedRegion = "ID"; break; }
+        if (url.includes(".co.th") || gmv.startsWith("฿")) { detectedRegion = "TH"; break; }
+        if (url.includes(".ph") || gmv.startsWith("₱")) { detectedRegion = "PH"; break; }
+        if (url.includes(".vn") || gmv.startsWith("₫")) { detectedRegion = "VN"; break; }
+      }
+
       // Jika ekstensi aktif, otomatis jalankan enrichment komisi & link affiliate
       if (isExtensionInstalled) {
         try {
-          const enriched = await enrichRows(parsedRows, batchRegion);
+          const enriched = await enrichRows(parsedRows, detectedRegion);
           onFileLoaded(file.name, enriched);
           return;
         } catch (enrichErr: unknown) {
