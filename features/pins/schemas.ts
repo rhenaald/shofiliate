@@ -8,11 +8,28 @@ export const PINS_REGIONS: PinRegion[] = ["MY", "SG", "ID", "TH", "PH", "VN"];
 // satu param invalid jatuh ke default aman, tidak pernah 500 (AC-001).
 export const pinsRegionSchema = z.enum(PINS_REGIONS).catch("MY");
 
+// Kolom yang boleh di-sort dari URL (allowlist — di luar ini ditolak).
+// Meniru catalogSortIds agar paritas perilaku sort dengan katalog.
+export const pinsSortIds = [
+  "name",
+  "likes",
+  "sales30d",
+  "growth30d",
+  "totalSales",
+  "gmv30d",
+  "listedOn",
+] as const;
+
+export type PinsSortId = (typeof pinsSortIds)[number];
+
 export const pinsParamsSchema = z.object({
   region: pinsRegionSchema,
   q: z.string().trim().max(100).catch(""),
   page: z.coerce.number().int().min(1).catch(1),
   pageSize: z.coerce.number().int().min(1).max(100).catch(25),
+  // sort undefined = ikut default board (pinnedAt desc).
+  sort: z.enum(pinsSortIds).optional().catch(undefined),
+  dir: z.enum(["asc", "desc"]).catch("desc"),
 });
 
 export type PinsParams = z.output<typeof pinsParamsSchema>;

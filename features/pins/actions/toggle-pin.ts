@@ -35,7 +35,15 @@ const pinWithRelations = {
       shopId: true,
       name: true,
       url: true,
+      currency: true,
       shopName: true,
+      category: true,
+      listedOn: true,
+      affiliateUrl: true,
+      komisiXtraRate: true,
+      commissionLiveAmount: true,
+      commissionSocialAmount: true,
+      commissionVideoAmount: true,
     },
   },
   pinnedBy: {
@@ -50,16 +58,55 @@ type PinWithRelations = Prisma.PinGetPayload<{
   include: typeof pinWithRelations;
 }>;
 
-function toPinDTO(pin: PinWithRelations): PinDTO {
+type LatestSnapshot = Prisma.ProductSnapshotGetPayload<{
+  select: {
+    likedCount: true;
+    sales30d: true;
+    growth30d: true;
+    historicalSold: true;
+    gmv30d: true;
+    komisiXtraRate: true;
+    commissionLiveAmount: true;
+    commissionSocialAmount: true;
+    commissionVideoAmount: true;
+  };
+}> | null;
+
+function toPinDTO(pin: PinWithRelations, snapshot: LatestSnapshot): PinDTO {
+  const product = pin.product;
+  const toAmount = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+  };
   return {
     pinId: pin.id,
-    productId: pin.product.id,
-    region: pin.product.region,
-    itemId: pin.product.itemId,
-    shopId: pin.product.shopId,
-    name: pin.product.name,
-    url: pin.product.url,
-    shopName: pin.product.shopName === "" ? "-" : pin.product.shopName,
+    productId: product.id,
+    region: product.region,
+    itemId: product.itemId,
+    shopId: product.shopId,
+    name: product.name,
+    url: product.url,
+    currency: product.currency,
+    shopName: product.shopName === "" ? "-" : product.shopName,
+    category: product.category === "" ? "-" : product.category,
+    listedOn: product.listedOn ? product.listedOn.toISOString() : null,
+    likes: snapshot?.likedCount ?? 0,
+    sales30d: snapshot?.sales30d ?? 0,
+    growth30d: snapshot?.growth30d ?? 0,
+    totalSales: snapshot?.historicalSold ?? 0,
+    gmv30d: snapshot ? Number(snapshot.gmv30d) : 0,
+    affiliateUrl: product.affiliateUrl,
+    komisiXtraRate: snapshot?.komisiXtraRate ?? product.komisiXtraRate,
+    commissionLiveAmount:
+      toAmount(snapshot?.commissionLiveAmount) ??
+      toAmount(product.commissionLiveAmount),
+    commissionSocialAmount:
+      toAmount(snapshot?.commissionSocialAmount) ??
+      toAmount(product.commissionSocialAmount),
+    commissionVideoAmount:
+      toAmount(snapshot?.commissionVideoAmount) ??
+      toAmount(product.commissionVideoAmount),
     note: pin.note,
     pinnedBy: {
       name: pin.pinnedBy.name,
@@ -102,7 +149,25 @@ export async function togglePin(input: unknown): Promise<PinDTO> {
   });
 
   revalidatePinRoutes();
-  return toPinDTO(pin);
+
+  // Metrik terbaru untuk DTO penuh (satu query tambahan; null bila produk
+  // manual belum punya snapshot — mapper memberi default aman).
+  const snapshot = await prisma.productSnapshot.findFirst({
+    where: { productId: data.productId },
+    orderBy: [{ scrapedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      likedCount: true,
+      sales30d: true,
+      growth30d: true,
+      historicalSold: true,
+      gmv30d: true,
+      komisiXtraRate: true,
+      commissionLiveAmount: true,
+      commissionSocialAmount: true,
+      commissionVideoAmount: true,
+    },
+  });
+  return toPinDTO(pin, snapshot);
 }
 
 /**

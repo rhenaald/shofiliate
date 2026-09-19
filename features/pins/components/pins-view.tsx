@@ -32,6 +32,12 @@ import { PinsTable } from "@/features/pins/components/pins-table";
 import { PinsToolbar } from "@/features/pins/components/pins-toolbar";
 import { unpin } from "@/features/pins/actions/toggle-pin";
 import { updatePinNote } from "@/features/pins/actions/update-pin-note";
+import type { PinsSortId } from "@/features/pins/schemas";
+import { pinsSortIds } from "@/features/pins/schemas";
+import {
+  PIN_COLUMN_SORT_ID,
+  PINS_SORT_DEFAULT_DIR,
+} from "@/features/pins/types";
 import type { PinDTO } from "@/features/pins/types";
 
 const editNoteFormSchema = z.object({
@@ -52,6 +58,38 @@ export function PinsView({ dtos, total, page, pageSize }: PinsViewProps) {
   const [addOpen, setAddOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<PinDTO | null>(null);
   const [unpinning, setUnpinning] = React.useState<PinDTO | null>(null);
+
+  const rawSort = searchParams.get("sort");
+  const sortId: PinsSortId | null =
+    rawSort && (pinsSortIds as readonly string[]).includes(rawSort)
+      ? (rawSort as PinsSortId)
+      : null;
+  const sortDir = searchParams.get("dir") === "asc" ? "asc" : "desc";
+
+  // Siklus klik header: default kolom → lawan arah → kembali default board
+  // (pinnedAt desc). Meniru products-view katalog.
+  function handleSortChange(columnId: string) {
+    const sid = PIN_COLUMN_SORT_ID[columnId];
+    if (!sid) return;
+    const current = sortId ? { id: sortId, dir: sortDir } : null;
+    if (!current || current.id !== sid) {
+      replace({ sort: sid, dir: PINS_SORT_DEFAULT_DIR[sid] });
+    } else if (current.dir === PINS_SORT_DEFAULT_DIR[sid]) {
+      replace({ sort: sid, dir: PINS_SORT_DEFAULT_DIR[sid] === "desc" ? "asc" : "desc" });
+    } else {
+      replace({ sort: null, dir: null });
+    }
+  }
+
+  function handleSortDirection(dir: "asc" | "desc") {
+    const sid = sortId ?? null;
+    if (!sid) return;
+    replace({ sort: sid, dir });
+  }
+
+  function handleClearSort() {
+    replace({ sort: null, dir: null });
+  }
 
   function replace(
     updates: Parameters<typeof pinsHref>[2],
@@ -81,6 +119,11 @@ export function PinsView({ dtos, total, page, pageSize }: PinsViewProps) {
         total={total}
         page={page}
         pageSize={pageSize}
+        sortId={sortId}
+        sortDir={sortDir}
+        onSortChange={handleSortChange}
+        onSelectDirection={handleSortDirection}
+        onClearSort={handleClearSort}
         onEditNote={setEditing}
         onUnpin={setUnpinning}
         onAddPin={() => setAddOpen(true)}

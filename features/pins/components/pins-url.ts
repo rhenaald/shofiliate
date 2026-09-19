@@ -1,13 +1,15 @@
 // Helper URL pins: normalisasi default agar URL shareable tetap ringkas
-// (region=MY, q="", page=1, pageSize=25 tidak ditulis ke URL).
-// Diekstrak dari pages/pins-page.tsx saat MOD-05.
-export type PinsUrlKey = "region" | "q" | "page" | "pageSize";
+// (region=MY, q="", page=1, pageSize=25, sort kosong, dir=desc
+// tidak ditulis ke URL).
+export type PinsUrlKey = "region" | "q" | "page" | "pageSize" | "sort" | "dir";
 
 const DEFAULTS: Record<PinsUrlKey, string> = {
   region: "MY",
   q: "",
   page: "1",
   pageSize: "25",
+  sort: "",
+  dir: "desc",
 };
 
 export function pinsHref(

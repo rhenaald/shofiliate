@@ -20,29 +20,55 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
+import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 
-import { ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Pin, Plus } from "lucide-react";
+import {
+  ChevronsLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
+  ChevronDown,
+  Pin,
+  PinOff,
+  Plus,
+} from "lucide-react";
 
+import { BulkActionBar } from "@/components/shared/data-table/bulk-action-bar";
+import { DataTableViewOptions } from "@/components/shared/data-table/view-options";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { createPinColumns } from "@/features/pins/components/pin-columns";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "@/components/ui/toast";
+import { unpin } from "@/features/pins/actions/toggle-pin";
+import {
+  PINS_SORTABLE_COLUMNS,
+  createPinBoardColumns,
+} from "@/features/pins/components/pin-columns";
+import type { PinsSortId } from "@/features/pins/schemas";
+import { PIN_COLUMN_SORT_ID } from "@/features/pins/types";
 import type { PinDTO } from "@/features/pins/types";
 
 const features = tableFeatures({
   columnFilteringFeature,
   columnVisibilityFeature,
   rowPaginationFeature,
-  // Wajib untuk tipe useTable; tidak ada UI seleksi di board pins.
   rowSelectionFeature,
   rowSortingFeature,
   filteredRowModel: createFilteredRowModel(),
@@ -58,13 +84,17 @@ interface PinsTableProps {
   total: number;
   page: number;
   pageSize: number;
+  sortId: PinsSortId | null;
+  sortDir: "asc" | "desc";
+  onSortChange: (columnId: string) => void;
+  onSelectDirection: (dir: "asc" | "desc") => void;
+  onClearSort: () => void;
   onEditNote: (pin: PinDTO) => void;
   onUnpin: (pin: PinDTO) => void;
   onAddPin: () => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
-  /** Query + region aktif dari URL — untuk membedakan empty state
-      first-use vs hasil filter yang kosong. */
+  /** Query + region aktif dari URL — untuk deskripsi empty state. */
   query: string;
   region: string;
   isLoading?: boolean;
@@ -75,6 +105,11 @@ export function PinsTable({
   total,
   page,
   pageSize,
+  sortId,
+  sortDir,
+  onSortChange,
+  onSelectDirection,
+  onClearSort,
   onEditNote,
   onUnpin,
   onAddPin,
@@ -84,15 +119,31 @@ export function PinsTable({
   region,
   isLoading = false,
 }: PinsTableProps) {
+  const router = useRouter();
   const columns = React.useMemo(
-    () => createPinColumns({ onEditNote, onUnpin }),
-    [onEditNote, onUnpin],
+    () =>
+      createPinBoardColumns({
+        sortId,
+        sortDir,
+        onSort: onSortChange,
+        onEditNote,
+        onUnpin,
+      }),
+    [sortId, sortDir, onSortChange, onEditNote, onUnpin],
   );
-  // Urutan baris adalah otoritas server (pinnedAt desc).
+  // Urutan baris adalah otoritas server (pinnedAt desc default / ?sort&dir).
   // Sorting interaktif lokal dimatikan agar tidak menyesatkan.
   const [sorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({});
+  const [columnFilters, setColumnFilters] =
+    React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<ColumnVisibilityState>({
+      region: false,
+      sales30d: false,
+      growth30d: false,
+      gmv30d: false,
+      listedOn: false,
+    });
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
 
   const table = useTable({
@@ -123,7 +174,54 @@ export function PinsTable({
       pagination: { pageIndex: page - 1, pageSize },
     },
   });
+  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
   const pageCount = table.getPageCount();
+
+  const bulkUnpinMutation = useMutation({
+    mutationKey: ["pins", "bulk-unpin"],
+    mutationFn: async (pinIds: string[]) => {
+      await Promise.all(pinIds.map((id) => unpin({ pinId: id })));
+      return pinIds.length;
+    },
+  });
+
+  const bulkActions = React.useMemo(
+    () => [
+      {
+        id: "unpin",
+        label: "Unpin",
+        icon: PinOff,
+        onClick: () => {
+          if (bulkUnpinMutation.isPending) return;
+          const ids = table
+            .getFilteredSelectedRowModel()
+            .rows.map((r) => r.original.pinId);
+          if (ids.length === 0) return;
+          bulkUnpinMutation.mutate(ids, {
+            onSuccess: (count) => {
+              toast.add({ title: `${count} pin dihapus` });
+              table.resetRowSelection();
+              router.refresh();
+            },
+            onError: (error) => {
+              toast.add({
+                title:
+                  error instanceof Error
+                    ? error.message
+                    : "Gagal menghapus pin",
+              });
+            },
+          });
+        },
+      },
+    ],
+    [table, bulkUnpinMutation, router],
+  );
+
+  const activeColumnId =
+    Object.keys(PIN_COLUMN_SORT_ID).find(
+      (c) => PIN_COLUMN_SORT_ID[c] === sortId,
+    ) ?? null;
 
   // Satu diksi untuk semua kondisi kosong: judul netral yang sama +
   // deskripsi menyebut cakupan aktif (query/region) + satu aksi Tambah pin.
@@ -153,44 +251,34 @@ export function PinsTable({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm text-muted-foreground">
-          {total} pin aktif
-        </p>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm">
-                  Columns
-                  <ChevronDown className="size-3.5" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="max-h-64 w-56">
-              {table
-                .getAllColumns()
-                .filter((col) => col.getCanHide())
-                .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(v) => col.toggleVisibility(!!v)}
-                  >
-                    {col.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <p className="text-sm text-muted-foreground">{total} pin aktif</p>
+        <DataTableViewOptions
+          table={table}
+          sortableColumns={PINS_SORTABLE_COLUMNS}
+          activeColumnId={activeColumnId}
+          direction={sortDir}
+          onSelectColumn={onSortChange}
+          onSelectDirection={onSelectDirection}
+          onClearSort={onClearSort}
+        />
       </div>
-      <div className="overflow-x-auto rounded-md border">
-        <Table>
+      <ScrollArea className="w-full rounded-md border">
+        <Table containerClassName="overflow-visible" className="w-full min-w-max">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder ? null : <table.FlexRender header={header} />}
+                  <TableHead
+                    key={header.id}
+                    className={
+                      header.column.id === "select"
+                        ? "sticky left-0 z-10 bg-background"
+                        : undefined
+                    }
+                  >
+                    {header.isPlaceholder ? null : (
+                      <table.FlexRender header={header} />
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -207,9 +295,19 @@ export function PinsTable({
               ))
             ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell
+                      key={cell.id}
+                      className={
+                        cell.column.id === "select"
+                          ? "sticky left-0 z-10 bg-background"
+                          : undefined
+                      }
+                    >
                       <table.FlexRender cell={cell} />
                     </TableCell>
                   ))}
@@ -247,12 +345,15 @@ export function PinsTable({
             )}
           </TableBody>
         </Table>
-      </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length === 0 ? 0 : (page - 1) * pageSize + 1}–
-          {(page - 1) * pageSize + table.getRowModel().rows.length} of{" "}
-          {total}
+          Showing{" "}
+          {table.getRowModel().rows.length === 0
+            ? 0
+            : (page - 1) * pageSize + 1}
+          –{(page - 1) * pageSize + table.getRowModel().rows.length} of {total}
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -277,17 +378,32 @@ export function PinsTable({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="ml-auto flex flex-wrap items-center gap-1">
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.setPageIndex(0)}
+            disabled={!table.getCanPreviousPage()}
+          >
             <ChevronsLeft className="size-4" />
             <span className="sr-only">First page</span>
           </Button>
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
             <ChevronLeft className="size-4" />
             <span className="sr-only">Previous page</span>
           </Button>
           {pageItems(page - 1, pageCount).map((item, i) =>
             item === "ellipsis" ? (
-              <span key={`ellipsis-${i}`} className="px-1 text-sm text-muted-foreground">
+              <span
+                key={`ellipsis-${i}`}
+                className="px-1 text-sm text-muted-foreground"
+              >
                 ...
               </span>
             ) : (
@@ -303,16 +419,33 @@ export function PinsTable({
               </Button>
             ),
           )}
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
             <ChevronRight className="size-4" />
             <span className="sr-only">Next page</span>
           </Button>
-          <Button variant="outline" size="icon" className="size-8" onClick={() => table.setPageIndex(table.getPageCount() - 1)} disabled={!table.getCanNextPage()}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+            disabled={!table.getCanNextPage()}
+          >
             <ChevronsRight className="size-4" />
             <span className="sr-only">Last page</span>
           </Button>
         </div>
       </div>
+      <BulkActionBar
+        selectedCount={selectedCount}
+        actions={bulkActions}
+        onClear={() => table.resetRowSelection()}
+      />
     </div>
   );
 }
