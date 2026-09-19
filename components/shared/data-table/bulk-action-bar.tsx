@@ -8,6 +8,7 @@ export interface BulkAction {
   id: string;
   label: string;
   icon: LucideIcon;
+  variant?: "outline" | "destructive" | "default" | "ghost";
   onClick: () => void;
 }
 
@@ -26,7 +27,12 @@ export function BulkActionBar({ selectedCount, actions, onClear }: BulkActionBar
       {actions.map((action) => {
         const Icon = action.icon;
         return (
-          <Button key={action.id} variant="outline" size="sm" onClick={action.onClick}>
+          <Button
+            key={action.id}
+            variant={action.variant ?? "outline"}
+            size="sm"
+            onClick={action.onClick}
+          >
             <Icon className="size-3.5" />
             {action.label}
           </Button>

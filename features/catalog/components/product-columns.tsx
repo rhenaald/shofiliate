@@ -12,6 +12,7 @@ import {
   Copy,
   ExternalLink,
   Pin,
+  Trash2,
 } from "lucide-react";
 
 import type { DataTableFeatures } from "@/components/data-table";
@@ -102,6 +103,7 @@ export interface ProductPinActions {
 export function createProductColumns(
   view: CatalogView,
   opts: ProductColumnSort & ProductPinActions,
+  onDeleteProduct?: (row: CatalogRow) => void,
 ): ColumnDef<DataTableFeatures, CatalogRow>[] {
   const header = (
     columnId: string,
@@ -429,6 +431,17 @@ export function createProductColumns(
             onSelect: () =>
               toast.add({ title: "Koreksi region — coming in SH-8" }),
           },
+          ...(onDeleteProduct
+            ? [
+                {
+                  id: "delete",
+                  label: "Hapus produk",
+                  icon: Trash2,
+                  variant: "destructive" as const,
+                  onSelect: () => onDeleteProduct(data),
+                },
+              ]
+            : []),
         ];
       },
     }),

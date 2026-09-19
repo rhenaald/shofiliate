@@ -17,6 +17,7 @@ export interface RowAction {
   label: string;
   icon?: LucideIcon;
   disabled?: boolean;
+  variant?: "default" | "destructive";
   onSelect: () => void;
 }
 
@@ -86,6 +87,11 @@ export function withActionColumn<T extends RowData>(options: {
                   key={item.id}
                   disabled={item.disabled}
                   onClick={item.onSelect}
+                  className={
+                    item.variant === "destructive"
+                      ? "text-destructive focus:text-destructive focus:bg-destructive/10"
+                      : undefined
+                  }
                 >
                   {Icon ? <Icon className="size-3.5" /> : null}
                   {item.label}
