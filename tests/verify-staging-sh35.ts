@@ -15,5 +15,11 @@ async function run() {
   };
   assert.equal(sample._valid, true);
   console.log("types OK");
+
+  const allIds = ["f1:MY:1:1", "f1:row-2", "f1:MY:2:2"];
+  const selected = new Set(["f1:MY:1:1", "f1:MY:2:2"]);
+  const filtered = allIds.filter((id) => selected.has(id));
+  assert.deepEqual(filtered, ["f1:MY:1:1", "f1:MY:2:2"]);
+  console.log("filter semantics OK");
 }
 run();
