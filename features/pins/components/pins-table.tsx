@@ -30,6 +30,8 @@ import {
   ChevronRight,
   ChevronsRight,
   ChevronDown,
+  Copy,
+  Download,
   Pin,
   PinOff,
   Plus,
@@ -57,6 +59,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
 import { unpin } from "@/features/pins/actions/toggle-pin";
+import { exportPinsToExcel } from "@/features/pins/components/export-excel";
 import {
   PINS_SORTABLE_COLUMNS,
   createPinBoardColumns,
@@ -188,8 +191,67 @@ export function PinsTable({
     },
   });
 
+  const handleBulkCopyLink = React.useCallback(() => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    if (selectedRows.length === 0) return;
+
+    const affiliateUrls = selectedRows
+      .map((r) => r.original.affiliateUrl?.trim())
+      .filter((url): url is string => Boolean(url && url.length > 0));
+
+    if (affiliateUrls.length === 0) {
+      toast.add({
+        type: "warning",
+        title: "Tidak ada link affiliate",
+        description: "Pin yang dipilih belum memiliki link affiliate.",
+      });
+      return;
+    }
+
+    navigator.clipboard.writeText(affiliateUrls.join("\n"));
+
+    if (affiliateUrls.length === selectedRows.length) {
+      toast.add({
+        type: "success",
+        title: `${affiliateUrls.length} link affiliate disalin`,
+        description: "Semua link affiliate berhasil disalin ke clipboard.",
+      });
+    } else {
+      toast.add({
+        type: "info",
+        title: `${affiliateUrls.length} link affiliate disalin`,
+        description: `${selectedRows.length - affiliateUrls.length} pin lainnya belum memiliki link affiliate.`,
+      });
+    }
+  }, [table]);
+
+  const handleBulkExport = React.useCallback(() => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    if (selectedRows.length === 0) return;
+
+    const rowsToExport = selectedRows.map((r) => r.original);
+    exportPinsToExcel(rowsToExport, "pins-terpilih");
+    toast.add({
+      type: "success",
+      title: "Export Excel Berhasil",
+      description: `${rowsToExport.length} pin terpilih berhasil diunduh.`,
+    });
+  }, [table]);
+
   const bulkActions = React.useMemo(
     () => [
+      {
+        id: "copy-link",
+        label: "Copy link",
+        icon: Copy,
+        onClick: handleBulkCopyLink,
+      },
+      {
+        id: "export",
+        label: "Export",
+        icon: Download,
+        onClick: handleBulkExport,
+      },
       {
         id: "unpin",
         label: "Unpin",
@@ -218,7 +280,7 @@ export function PinsTable({
         },
       },
     ],
-    [table, bulkUnpinMutation, router],
+    [table, bulkUnpinMutation, router, handleBulkCopyLink, handleBulkExport],
   );
 
   const activeColumnId =
