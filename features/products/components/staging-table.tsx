@@ -1,8 +1,8 @@
 "use client";
 
-import { columnFilteringFeature, columnVisibilityFeature, createFilteredRowModel, createPaginatedRowModel, createSortedRowModel, filterFn_includesString, rowPaginationFeature, rowSelectionFeature, rowSortingFeature, sortFn_alphanumeric, sortFn_text, tableFeatures, useTable, type RowSelectionState, type SortingState } from "@tanstack/react-table";
+import { columnFilteringFeature, columnVisibilityFeature, createFilteredRowModel, createPaginatedRowModel, createSortedRowModel, filterFn_includesString, rowPaginationFeature, rowSelectionFeature, rowSortingFeature, sortFn_alphanumeric, sortFn_text, tableFeatures, useTable, type PaginationState, type RowSelectionState, type SortingState } from "@tanstack/react-table";
 import * as React from "react";
-import { CheckCheckIcon, SaveIcon } from "lucide-react";
+import { CheckCheckIcon, ChevronLeft, ChevronRight, SaveIcon } from "lucide-react";
 
 import { BulkActionBar } from "@/components/shared/data-table/bulk-action-bar";
 import { DataTableViewOptions } from "@/components/shared/data-table/view-options";
@@ -23,6 +23,7 @@ export function StagingTable({ data: initial, onSaveSelected, onSaveAll, isSavin
   React.useEffect(() => setData(initial), [initial]);
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [pagination, setPagination] = React.useState<PaginationState>({ pageIndex: 0, pageSize: 25 });
   const columns = React.useMemo(() => createStagingColumns((id) => setData((d) => d.filter((r) => r._stagingId !== id))), []);
   const table = useTable({
     features, data, columns,
@@ -30,8 +31,8 @@ export function StagingTable({ data: initial, onSaveSelected, onSaveAll, isSavin
     enableRowSelection: (row) => row.original._valid,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
-    state: { rowSelection, sorting },
-    initialState: { pagination: { pageIndex: 0, pageSize: 25 } },
+    onPaginationChange: setPagination,
+    state: { rowSelection, sorting, pagination },
   });
   const selectedIds = table.getSelectedRowIds();
   return (
@@ -63,6 +64,17 @@ export function StagingTable({ data: initial, onSaveSelected, onSaveAll, isSavin
         </Table>
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          <ChevronLeft className="size-3.5 mr-1" /> Prev
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Page {pagination.pageIndex + 1} of {table.getPageCount()}
+        </span>
+        <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          Next <ChevronRight className="size-3.5 ml-1" />
+        </Button>
+      </div>
       <BulkActionBar selectedCount={selectedIds.length} actions={[{ id: "save-selected", label: `Masukkan yang dicentang (${selectedIds.length})`, icon: SaveIcon, onClick: () => onSaveSelected(selectedIds) }]} onClear={() => table.resetRowSelection()} />
     </div>
   );
