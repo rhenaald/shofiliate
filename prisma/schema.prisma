@@ -7,6 +7,20 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  user
+  admin
+}
+
+enum Region {
+  MY
+  SG
+  ID
+  TH
+  PH
+  VN
+}
+
 model User {
   id              String    @id
   name            String
@@ -20,10 +34,16 @@ model User {
   sessions        Session[]
   accounts        Account[]
 
-  role       String?
+  role       Role     @default(user)
   banned     Boolean?  @default(false)
   banReason  String?
   banExpires DateTime?
+
+  productsAdded   Product[]     @relation("ProductsAdded")
+  importedBatches ImportBatch[] @relation("BatchesImported")
+  pinsMade        Pin[]         @relation("PinsMade")
+  contributions   ProductContributor[] @relation("Contributions")
+  dailyTargets    DailyTarget[] @relation("DailyTargets")
 
   @@unique([email])
   @@unique([username])
@@ -78,4 +98,130 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  region      Region
+  itemId      String
+  shopId      String
+  name        String
+  url         String
+  currency    String
+  shopName    String   @default("")
+  category    String   @default("")
+  listedOn    DateTime?
+  isManual    Boolean  @default(false)
+  needsRegion Boolean  @default(false)
+  affiliateUrl     String?
+  commissionRate   Float?
+  commissionAmount Decimal? @db.Decimal(12, 2)
+
+  // Kanal Komisi Shopee Affiliate
+  commissionLiveRate     Float?
+  commissionLiveAmount   Decimal? @db.Decimal(12, 2)
+  commissionSocialRate   Float?
+  commissionSocialAmount Decimal? @db.Decimal(12, 2)
+  commissionVideoRate    Float?
+  commissionVideoAmount  Decimal? @db.Decimal(12, 2)
+  hasKomisiXtra          Boolean  @default(false)
+  komisiXtraRate         Float?
+  komisiXtraAmount       Decimal? @db.Decimal(12, 2)
+
+  addedById   String
+  addedBy     User     @relation("ProductsAdded", fields: [addedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  snapshots   ProductSnapshot[]
+  latestSnapshotId String? @unique
+  latestSnapshot   ProductSnapshot? @relation("LatestSnapshot", fields: [latestSnapshotId], references: [id], onDelete: SetNull)
+  pins        Pin[]
+  contributors ProductContributor[]
+
+  @@unique([region, itemId, shopId])
+  @@index([region, createdAt])
+}
+
+model ProductSnapshot {
+  id             String       @id @default(cuid())
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchId        String?
+  batch          ImportBatch? @relation(fields: [batchId], references: [id])
+  sales1d        Int          @default(0)
+  sales7d        Int          @default(0)
+  sales30d       Int          @default(0)
+  growth30d      Float        @default(0)
+  gmv30d         Decimal      @default(0) @db.Decimal(12, 2)
+  historicalSold Int          @default(0)
+  totalGmv       Decimal      @default(0) @db.Decimal(12, 2)
+  likedCount     Int          @default(0)
+  commissionRate   Float?
+  commissionAmount Decimal?   @db.Decimal(12, 2)
+
+  // Kanal Komisi Shopee Affiliate Snapshot
+  commissionLiveRate     Float?
+  commissionLiveAmount   Decimal? @db.Decimal(12, 2)
+  commissionSocialRate   Float?
+  commissionSocialAmount Decimal? @db.Decimal(12, 2)
+  commissionVideoRate    Float?
+  commissionVideoAmount  Decimal? @db.Decimal(12, 2)
+  hasKomisiXtra          Boolean  @default(false)
+  komisiXtraRate         Float?
+  komisiXtraAmount       Decimal? @db.Decimal(12, 2)
+
+  scrapedAt      DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  latestFor Product? @relation("LatestSnapshot")
+
+  @@index([productId, scrapedAt])
+  @@index([sales30d, growth30d])
+  @@index([historicalSold])
+}
+
+model ImportBatch {
+  id           String   @id @default(cuid())
+  importedById String
+  importedBy   User     @relation("BatchesImported", fields: [importedById], references: [id])
+  fileName     String
+  totalRows    Int
+  imported     Int      @default(0)
+  updated      Int      @default(0)
+  duplicates   Int      @default(0)
+  failed       Int      @default(0)
+  createdAt    DateTime @default(now())
+  snapshots    ProductSnapshot[]
+}
+
+model Pin {
+  id         String    @id @default(cuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  pinnedById String
+  pinnedBy   User      @relation("PinsMade", fields: [pinnedById], references: [id])
+  note       String?
+  createdAt  DateTime  @default(now())
+  unpinnedAt DateTime?
+
+  @@index([createdAt])
+}
+
+model ProductContributor {
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("Contributions", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([productId, userId])
+}
+
+model DailyTarget {
+  userId String
+  user   User     @relation("DailyTargets", fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime @db.Date
+  count  Int      @default(0)
+
+  @@id([userId, date])
 }
