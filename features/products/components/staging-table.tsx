@@ -20,7 +20,11 @@ const features = tableFeatures({
 
 export function StagingTable({ data: initial, onSaveSelected, onSaveAll, isSaving }: { data: StagingRow[]; onSaveSelected: (ids: string[]) => void; onSaveAll: () => void; isSaving: boolean }) {
   const [data, setData] = React.useState(initial);
-  React.useEffect(() => setData(initial), [initial]);
+  const [prevInitial, setPrevInitial] = React.useState(initial);
+  if (prevInitial !== initial) {
+    setPrevInitial(initial);
+    setData(initial);
+  }
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [pagination, setPagination] = React.useState<PaginationState>({ pageIndex: 0, pageSize: 25 });

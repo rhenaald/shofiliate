@@ -40,7 +40,12 @@ export async function saveStaging(params: { fileIds?: string[]; selectedIds?: st
     if (selected) return selected.has(r._stagingId);
     return true;
   });
-  const rawRows: RawImportRow[] = target.map(({ _stagingId, _fileId, _fileName, _rowNumber, _valid, _error, ...rest }) => rest);
+  const STRIP_KEYS = ["_stagingId", "_fileId", "_fileName", "_rowNumber", "_valid", "_error"];
+  const rawRows: RawImportRow[] = target.map((r) => {
+    const copy: Record<string, unknown> = { ...r };
+    for (const k of STRIP_KEYS) delete copy[k];
+    return copy;
+  });
   const fileIds = Array.from(new Set(union.map((r) => r._fileId)));
   const fileName = `staging-${fileIds.length}-files`;
   const result = await importProducts({ fileName, rows: rawRows });
