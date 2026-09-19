@@ -179,11 +179,11 @@
     try {
       chrome.runtime.onMessage.addListener((message) => {
         if (!isExtensionValid()) return;
-        if (message && message.source === "shofiliate-companion-background") {
+        if (message && (message.source === "shofiliate-companion-background" || message.type === "ENRICH_PROGRESS")) {
           window.postMessage(
             {
-              source: "shofiliate-companion-extension",
               ...message,
+              source: "shofiliate-companion-extension",
             },
             "*"
           );

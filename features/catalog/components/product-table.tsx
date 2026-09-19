@@ -58,9 +58,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { exportCatalogToExcel } from "@/features/catalog/components/export-excel";
 import { deleteProducts } from "@/features/products/actions/delete-products";
+import { updateProductAffiliate } from "@/features/products/actions/update-product-affiliate";
+import { useCompanionExtension } from "@/features/products/hooks/use-companion-extension";
 import {
   SORTABLE_COLUMNS,
   createProductColumns,
@@ -176,6 +178,86 @@ export function ProductTable({
 
   const pinPending = pinMutation.isPending;
 
+  const queryClient = useQueryClient();
+  const { isExtensionInstalled, scrapeSingleProduct } = useCompanionExtension();
+  const [scrapingProductId, setScrapingProductId] = React.useState<string | null>(null);
+
+  const handleScrapeProduct = React.useCallback(
+    async (row: CatalogRow) => {
+      if (!isExtensionInstalled) {
+        toast.add({
+          title: "Ekstensi belum aktif",
+          description:
+            "Pastikan ekstensi Shofiliate Companion terpasang dan aktif di browser Chrome Anda.",
+        });
+        return;
+      }
+
+      try {
+        setScrapingProductId(row.productId);
+        toast.add({
+          title: "Mencari link affiliate...",
+          description: `Sedang menghubungi portal Shopee untuk produk: ${row.name.slice(0, 40)}...`,
+        });
+
+        const enriched = await scrapeSingleProduct({
+          itemId: row.itemId,
+          name: row.name,
+          url: row.url,
+          region: row.region,
+        });
+
+        const newLink = enriched.affiliate_link || enriched.affiliate_url;
+        if (!newLink) {
+          toast.add({
+            title: "Link tidak ditemukan",
+            description: "Portal Shopee Affiliate tidak mengembalikan tautan unik untuk produk ini.",
+          });
+          return;
+        }
+
+        const res = await updateProductAffiliate({
+          productId: row.productId,
+          affiliateUrl: newLink,
+          commissionRate: typeof enriched.commission_rate === "number" ? enriched.commission_rate : undefined,
+          commissionAmount: typeof enriched.commission_amount === "number" ? enriched.commission_amount : undefined,
+          commissionLiveRate: typeof enriched.commission_live_rate === "number" ? enriched.commission_live_rate : undefined,
+          commissionLiveAmount: typeof enriched.commission_live_amount === "number" ? enriched.commission_live_amount : undefined,
+          commissionSocialRate: typeof enriched.commission_social_rate === "number" ? enriched.commission_social_rate : undefined,
+          commissionSocialAmount: typeof enriched.commission_social_amount === "number" ? enriched.commission_social_amount : undefined,
+          commissionVideoRate: typeof enriched.commission_video_rate === "number" ? enriched.commission_video_rate : undefined,
+          commissionVideoAmount: typeof enriched.commission_video_amount === "number" ? enriched.commission_video_amount : undefined,
+          hasKomisiXtra: typeof enriched.has_komisi_xtra === "boolean" ? enriched.has_komisi_xtra : undefined,
+          komisiXtraRate: typeof enriched.komisi_xtra_rate === "number" ? enriched.komisi_xtra_rate : undefined,
+          komisiXtraAmount: typeof enriched.komisi_xtra_amount === "number" ? enriched.komisi_xtra_amount : undefined,
+        });
+
+        if (res.success) {
+          toast.add({
+            title: "Link affiliate berhasil didapatkan!",
+            description: newLink,
+          });
+          queryClient.invalidateQueries({ queryKey: ["catalog"] });
+          router.refresh();
+        } else {
+          toast.add({
+            title: "Gagal menyimpan link",
+            description: res.error || "Gagal menyimpan link ke database.",
+          });
+        }
+      } catch (err: unknown) {
+        console.error("Gagal scrape single product:", err);
+        toast.add({
+          title: "Pencarian link gagal",
+          description: err instanceof Error ? err.message : "Terjadi kesalahan saat menghubungi Shopee.",
+        });
+      } finally {
+        setScrapingProductId(null);
+      }
+    },
+    [isExtensionInstalled, scrapeSingleProduct, queryClient, router]
+  );
+
   const columns = React.useMemo(
     () =>
       createProductColumns(
@@ -189,6 +271,8 @@ export function ProductTable({
           pinPending,
         },
         handleDeleteSingle,
+        handleScrapeProduct,
+        scrapingProductId,
       ),
     [
       view,
@@ -199,6 +283,8 @@ export function ProductTable({
       handlePin,
       pinPending,
       handleDeleteSingle,
+      handleScrapeProduct,
+      scrapingProductId,
     ],
   );
   // Urutan baris adalah otoritas server (sort per view / ?sort&dir).

@@ -86,6 +86,7 @@ export interface ListProductsResult {
 export interface CatalogRow {
   id: string;
   productId: string;
+  itemId: string;
   name: string;
   url: string;
   currency: string;
@@ -109,6 +110,7 @@ export function dtoToCatalogRow(dto: CatalogProductDTO): CatalogRow {
   return {
     id: `${dto.region}-${dto.itemId}-${dto.shopId}`,
     productId: dto.id,
+    itemId: dto.itemId,
     name: dto.name,
     url: dto.url,
     currency: dto.currency,
