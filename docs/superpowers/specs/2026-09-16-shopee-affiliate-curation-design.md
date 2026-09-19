@@ -1,8 +1,8 @@
 # PRD / Design — Sistem Kurasi Produk Shopee Affiliate untuk Live Streamer
 
-- Status: Draft revisi v3 untuk review user (hasil brainstorming + revisi 2026-09-16)
-- Tanggal: 2026-09-16 (revisi: struktur scraping aktual, Best/Trending = filter, Pins = page terpisah, tabel v9+shadcn, Linear-ready)
-- Sumber riset: Exa (domain & metrik Shopee 6 negara, definisi sold vs historicalSold), Context7 (Prisma `/prisma/web`, TanStack Table `/tanstack/table`), Sequential-thinking (5 langkah analisis)
+- Status: Draft revisi v4 Phase 2 untuk review user (hasil revisi 2026-09-19: staging import + kurasi parametrik)
+- Tanggal: 2026-09-19 (revisi v4: staging single-jsonb per file, tabel staging full + seleksi, enrich batch-paralel single-writer, filter parametrik + sortir baru, tabel unified, akun Shopee + edit + copy link, tools page placeholder)
+- Sumber riset: Exa (domain & metrik Shopee 6 negara, definisi sold vs historicalSold; pola Open API productOfferV2 + generateShortLink + rate-limit backoff), Context7 (Prisma `/prisma/web` Json whole-replace, TanStack Table `/tanstack/table` manual pagination + getSelectedRowIds), Sequential-thinking (outline Phase 2)
 - Keputusan clarifier user (2026-09-16):
   - Target 300 = **harian per streamer**
   - Best Seller vs Trending = **Best = total sold, Trending = velocity**
@@ -13,6 +13,11 @@
   - R2: Best Seller & Trending **bukan page baru, melainkan filter** dalam satu katalog. **Pinned products tetap page berbeda** (`/dashboard/products/pins`) — revisi susulan.
   - R3: Tampilan data memakai **TanStack DataTable v9 + style shadcn** (detail kolom di §9).
   - R4: Dokumen dirapikan dengan **skill linear-tracking** agar siap dipakai di Linear (§13).
+- Keputusan clarifier user (2026-09-19, Phase 2):
+  - Komisi: optimasi = **batch + concurrency paralel + retry** via Companion Extension (tetap, tanpa Open API server-side di Phase 2).
+  - Velocity = **`sales_30d / 30`** (harian); umur produk = **hari sejak `listed_on`** sebagai number input (bukan bucket).
+  - Staging = **satu baris DB per file, kolom `rows JSONB`** (`ImportStagingFile`); multi-file = banyak file ter-append di view. Enrich memakai **single-writer serial** (merge di memori, tulis balik batched/final) karena nilai `jsonb` immutable (full-replace per UPDATE).
+  - Tools page = **static placeholder**, konten menyusul. Edit produk default = semua field non-metrik (nama, kategori, akun Shopee, region, URL); metrik tetap hanya via import.
 
 ---
 
@@ -232,8 +237,26 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 - Form single product (RHF + zod) mengikuti field aktual: `product_url` (wajib, untuk parse `shopId`+`region`), `product_name`, `seller_name`, `category`, `listed_on`, `likes`, `sales_1d/7d/30d`, `growth_30d`, `gmv_30d`, `total_sales`, `total_gmv`. Nilai `"-"` diizinkan di form dan diparse jadi null.
 - Jika URL tidak match `/product/(\d+)/(\d+)/` → tolak dengan pesan jelas (minta URL produk Shopee yang valid), tidak generate ID lokal (keputusan revisi: cegah duplikat liar).
 - Edit hanya untuk field korektif (region, nama, seller, kategori, listed_on); metrik sold/likes/growth/GMV hanya berubah via import snapshot berikutnya (tidak bisa diedit manual untuk jaga integritas ranking).
+- **Tambahan Phase 2 (rev 12–14):** field `shopeeAccount` (string bebas, nama akun Shopee pemilik/entri produk) di form manual + kolom katalog (toggle visibility); edit produk diperluas ke semua field non-metrik (nama, seller, kategori, listed_on, region, URL, akun Shopee, note) via dialog edit + audit; aksi copy link ganda (copy product URL + copy affiliate link, dengan fallback clipboard + toast).
 
-## 7. Formula & contoh (format aktual)
+### F8 — Import staging single-jsonb per file + seleksi + multi-file (baru Phase 2, rev 2/3/7/9)
+
+- **Model:** `ImportStagingFile` — satu baris DB per file upload (`userId, fileName, rows JSONB [RawImportRow + hasil enrichment], rowCount, enrichedCount, status=staged|enriched|saved|expired, expiresAt +7 hari`). Keputusan 2026-09-19: single jsonb per file (bukan per-row).
+- **Konsekuensi jsonb immutable:** nilai `rows` hanya berubah via full-replace `UPDATE`. Enrichment memakai **single-writer serial**: worker paralel boleh fetch/scoring konkuren, tapi merge + tulis balik dilakukan satu penulis berurutan (batch tiap N produk mis. 20, plus tulis final). Dilarang multi-writer read-modify-write konkuren ke file yang sama (lost update).
+- **Alur:** upload file 1 → staging file 1 → boleh upload file 2/3 tanpa kehilangan (append sebagai file baru); view staging = union semua file aktif user dengan pagination (mis. 25/baris, server-side via query `rows` di app atau paginasi client untuk <2k baris).
+- **Tabel staging full (rev 1/2/10):** semua baris hasil baca (bukan 10 preview), kolom unified rev 10: nama produk (+seller), kategori, komisi % (live/video/sosmed + badge XTRA), estimasi komisi nominal (live/sosmed/video), penjualan harian (`sales_1d`), mingguan (`sales_7d`), bulanan (`sales_30d`), growth 30d, link komisi affiliate, checkbox seleksi, status validasi per baris.
+- **Seleksi (rev 3):** checkbox per baris + select-all per halaman + "pilih semua hasil filter"; aksi `Masukkan semua ke DB` vs `Masukkan yang dicentang`; hanya baris valid yang bisa dipilih; duplikat dalam staging ditandai (bukan error).
+- **Unduh ulang (rev 9):** staging yang belum disimpan bisa diunduh (JSON/CSV) lengkap dengan kolom enrichment (komisi 3 kanal + affiliate link); unduh per file atau gabungan.
+
+### F9 — Optimasi enrich komisi via extension (Phase 2, rev 4)
+
+- Tetap via Companion Extension (postMessage `ENRICH_PRODUCTS`); optimasi = **batching** (kirim batch mis. 10–20 produk per pesan), **concurrency** (2–4 batch paralel + jitter), **retry/backoff** per batch gagal (maks 3x) + timeout dinamis yang sudah ada, progress per batch (completed/total/currentProduct) + tombol "Lengkapi Komisi & Link" + scrape per baris ("Cari").
+- Single-writer DB (lihat F8) + enrichment state di memori dulu; tulis balik ke `rows` JSONB secara batched agar tidak rewrite per produk.
+- Gagal enrich tidak memblokir staging: baris tetap tersimpan mentah + penanda "belum enriched", bisa di-retry selektif.
+
+### F10 — Tools page statis (Phase 2, rev 8)
+
+- Rute `app/dashboard/tools/page.tsx → features/tools/pages/tools-page.tsx` (Server Component caller + komposisi client). Daftar tools statis (placeholder, konten menyusul): Import, Kalkulator komisi, Link generator, dsb. — cukup kartu + link internal/eksternal + empty state. Tidak ada logika bisnis di `app/`.
 
 ```
 // Best Seller (view=best, snapshot S terbaru, per region)
@@ -249,6 +272,29 @@ rank_trend = sort_desc(sales_30d, growth_30d)
 ```
 
 Catatan: `sales_30d` = penjualan 30 hari (velocity), `total_sales` = total all-time (best). `growth_30d` dari extension dipakai apa adanya untuk label, bukan dihitung ulang. Pembedaan ini selaras temuan Exa (`sold` vs `historical_sold`).
+
+**Phase 2 (keputusan 2026-09-19):**
+
+```
+// Velocity harian (sortir + kolom info)
+velocity_daily = sales_30d / 30
+// contoh: 322 → 10.73/hari; 19 → 0.63/hari; "-"→null (tidak ikut sortir velocity)
+
+// Umur produk (filter parametrik, number input hari)
+age_days = floor((today Asia/Kuala_Lumpur - listed_on) / 86400s)
+// listed_on null → age null (tidak ikut filter umur bila filter aktif)
+// contoh filter: age_days >= 30 (produk berumur min. 30 hari)
+
+// Filter parametrik katalog + staging (AND semua aktif):
+//   minSales1d/minSales7d/minSales30d (int ≥ 0, default off)
+//   growthSign = all|positive|negative (growth_30d > 0 / < 0; nol ikut all)
+//   minAgeDays/maxAgeDays (int ≥ 0, default off)
+
+// Sortir baru (katalog + staging):
+//   terbaru = listed_on desc (null terakhir)
+//   velocity = velocity_daily desc
+//   sales1d desc | sales30d desc | likes desc
+```
 
 ## 8. Model data yang diusulkan (Prisma, format aktual, kompatibel schema existing)
 
@@ -266,6 +312,7 @@ model Product {
   url           String   // = product_url
   currency      String   // dari simbol gmv (RM→MYR dst.), fallback region
   shopName      String?  // = seller_name
+  shopeeAccount String?  // = nama akun Shopee pengentri/pemilik (rev 12, string bebas)
   category      String?  // = category ("Beauty-Skincare-...")
   listedOn      DateTime?
   isManual      Boolean  @default(false)
@@ -340,6 +387,20 @@ model DailyTarget {
   count  Int      @default(0)
   @@id([userId, date])
 }
+
+// Phase 2 (keputusan 2026-09-19): satu baris per file upload, konten di JSONB.
+model ImportStagingFile {
+  id            String   @id @default(cuid())
+  userId        String
+  fileName      String
+  rows          Json     // array RawImportRow + hasil enrichment (komisi 3 kanal + affiliate link)
+  rowCount      Int      @default(0)
+  enrichedCount Int      @default(0)
+  status        String   @default("staged") // staged|enriched|saved|expired
+  expiresAt     DateTime // createdAt + 7 hari (cleanup cron)
+  createdAt     DateTime @default(now())
+  @@index([userId, createdAt])
+}
 ```
 
 Catatan Context7: pola di atas memakai relasi standar Prisma + index untuk query ranking (`region + snapshot date`, `sales30d/growth30d`, `historicalSold`) dan dedup composite — tidak butuh fitur Prisma eksperimental. Contoh 2 baris COSRX di §6 menjadi 2 `Product` + masing-masing 1 `ProductSnapshot` pada 1 `ImportBatch`.
@@ -396,6 +457,13 @@ features/products/
 - Client component tidak import `data/`/`actions/` langsung; data diambil di `pages/` (RSC) lalu props serializable ke `components/`.
 - Mutasi via server actions + revalidate; list besar via TanStack Query.
 
+**Phase 2 — tabel unified + staging + toolbar parametrik (rev 1/2/5/6/10):**
+
+- Bentuk tabel tunggal untuk staging (`import-page` step staging) dan katalog (`Semua Produk`): kolom berurutan — `select` (staging wajib, katalog opsional bulk-pin) | nama produk (+seller kecil, link produk) | kategori | komisi % (live/video/sosmed + badge XTRA) | estimasi komisi nominal (live/sosmed/video) | penjualan harian `sales_1d` | mingguan `sales_7d` | bulanan `sales_30d` (+velocity info `x.x/hari`) | growth 30d (±% + warna) | link komisi affiliate (buka + copy) | aksi (staging: hapus baris + validasi; katalog: pin, edit, hapus, copy link). `likes`, `listed_on`, `umur hari`, `akun Shopee`, `region` sebagai kolom toggle.
+- Staging: full rows + pagination server-side (atau client untuk <2k), seleksi lintas halaman via `getSelectedRowIds` (Context7), toolbar staging berisi: file-tabs (multi-file), filter parametrik (min 1/7/30d number, growth all/±, umur min/maks hari), sortir (terbaru, velocity, sales 1d, sales 30d, likes), tombol enrich, unduh enriched (JSON/CSV), `Masukkan semua` / `Masukkan yang dicentang (N)`.
+- Katalog: toolbar 기존 (view/region/search) + panel filter parametrik yang sama + sortir baru yang sama (URL-shareable: `min1d, min7d, min30d, growth, minAge, maxAge, sort, dir`); region filter tetap (verify-only rev 11).
+- Rute baru: `/dashboard/tools` (static placeholder) + Sidebar menu `Tools`; import flow menjadi `upload → staging (multi-file) → enrich → seleksi → save → result`.
+
 ## 10. Pendekatan yang dipertimbangkan (trade-off)
 
 1. **(Dipilih) Batch snapshot + skor deterministik.** Pro: sesuai permintaan "tidak real-time", murah, explainable, cocok dengan upload file & target harian. Kontra: ranking bisa basi maksimal 24 jam (dimitigasi dengan stempel batch yang jelas).
@@ -424,13 +492,24 @@ features/products/
 - [ ] `/dashboard/**` tanpa session → redirect sign-in; role default sign-up = user.
 - [ ] Admin bisa koreksi region produk milik user lain (tercatat); user biasa tidak bisa.
 
+**UAT Phase 2 (v4):**
+
+- [ ] Staging tampilkan full rows paginated (bukan 10) dengan kolom sales_1d/7d/30d + growth_30d + komisi 3 kanal + affiliate link (rev 1/2/10).
+- [ ] Seleksi: centang 3 dari 100 → `Masukkan yang dicentang` hanya simpan 3; `Masukkan semua` simpan semua valid (rev 3).
+- [ ] Enrich 100 produk selesai paralel dengan retry; gagal parsial tetap bisa retry selektif; single-writer tanpa lost update (rev 4).
+- [ ] Filter `min30d=50 + growth=positive + minAge=30` mempersempit tabel staging & katalog secara konsisten; sortir velocity = sales_30d/30 desc; terbaru = listed_on desc (rev 5/6).
+- [ ] Upload file kedua tanpa menghapus staging file pertama; unduh enriched (JSON/CSV) sebelum save berisi kolom komisi + affiliate link (rev 7/9).
+- [ ] Katalog + staging memakai bentuk tabel unified rev 10; filter region tetap bekerja untuk semua produk (rev 10/11).
+- [ ] Field akun Shopee tersimpan + tampil; edit non-metrik tercatat; copy product link + affiliate link bekerja dengan toast (rev 12/13/14).
+- [ ] `/dashboard/tools` tampil sebagai static page placeholder + menu Sidebar (rev 8).
+
 ## 13. Fase + Linear breakdown (Hybrid Thin+, siap copy ke Linear)
 
 **Fase:**
 
 - **MVP (fase 1):** F0–F7 di atas, satu board bersama di page Pins terpisah, formula v1 field aktual, katalog + filter best/trending, tanpa chart.
-- **Fase 2:** riwayat harga/GMV per produk, perbandingan region side-by-side, board per live session, threshold trending konfigurabel admin, export shortlist.
-- **Fase 3:** integrasi extension→API langsung, skor opportunity (butuh data komisi), notifikasi progres 300.
+- **Fase 2 (v4 ini, 14 poin revisi):** F8 staging import single-jsonb per file + tabel staging full paginated + seleksi simpan (semua/tercentang); F9 enrich komisi batch-paralel + retry single-writer + unduh ulang enriched; filter parametrik (min sales 1/7/30d, growth ±, umur hari) + sortir baru (terbaru, velocity, sales 1d, sales 30d, likes); tabel unified import + katalog (rev 10); akun Shopee string + edit non-metrik + copy link; tools page static placeholder. Region katalog = verify-only (sudah ada).
+- **Fase 3:** riwayat harga/GMV per produk, perbandingan region side-by-side, board per live session, threshold trending konfigurabel admin, export shortlist, integrasi extension→API langsung, skor opportunity, notifikasi progres 300.
 
 **Aturan Linear yang dipakai (protocol `2026-09-15-linear-project-protocol-design.md` + skill `linear-tracking`):**
 
@@ -529,6 +608,79 @@ Subs: [products] form+validasi; [products] karantina UI
 ```
 
 **Catatan label:** protocol minta tepat satu dari `feature|bug|chore|docs|spike` (lowercase). Workspace Sigma saat ini memakai `Feature/Bug/Improvement/...` — putuskan saat eksekusi: buat label lowercase baru sesuai protocol atau petakan `feature→Feature`. Jangan dual-label. Semua parent di atas = `feature`; pecahan riset (jika ada) = `spike` time-boxed 1 cycle.
+
+**Milestone Phase 2 siap buat (JIT, 1 milestone, 6 parent — memenuhi 3–10 issues):**
+
+- `[Phase 2] Import staging + kurasi parametrik` — demo: multi-file → staging full + filter/sort → enrich paralel → seleksi → save → katalog unified + edit/copy + tools page. Target: akhir cycle berjalan +2.
+
+```
+[import] Staging full + seleksi simpan (label: feature)
+Goal: Tabel staging full paginated + seleksi semua/tercentang.
+Scope:
+- in: ImportStagingFile jsonb/file, tabel unified staging, select-all + getSelectedRowIds, save semua/terpilih
+- Out: enrich paralel (P terpisah), filter parametrik (P terpisah)
+Acceptance:
+- [ ] full rows paginated tampil sales_1d/7d/30d + growth
+- [ ] save semua vs tercentang benar
+- [ ] hanya baris valid bisa dipilih
+Links: <URL doc ini §6 F8 §9>
+Subs: [import] model staging + append; [import] tabel staging + seleksi; [import] save selektif ke DB
+
+[import] Multi-file + unduh enriched (label: feature)
+Goal: Append multi-file tanpa hilang + unduh enriched kapan pun.
+Scope:
+- in: file-tabs union, unduh JSON/CSV enriched per file/gabungan, expiresAt +7 hari
+- Out: enrich logic
+Acceptance:
+- [ ] file kedua tidak hapus file pertama
+- [ ] unduh berisi komisi 3 kanal + affiliate link
+Links: <URL doc ini §6 F8>
+Subs: [import] append + file-tabs; [import] unduh enriched CSV/JSON
+
+[import] Enrich komisi batch paralel (label: feature)
+Goal: Enrich 100 produk cepat via batch + retry single-writer.
+Scope:
+- in: batch 10-20/pesan, 2-4 paralel + jitter, retry 3x, merge serial batched, progress
+- Out: Open API server-side
+Acceptance:
+- [ ] paralel + retry tanpa lost update jsonb
+- [ ] gagal parsial bisa retry selektif
+Links: <URL doc ini §6 F9>
+Subs: [import] batch+retry extension; [import] single-writer merge
+
+[catalog] Filter parametrik + sortir unified (label: feature)
+Goal: Filter min 1/7/30d + growth± + umur + 5 sortir di staging & katalog.
+Scope:
+- in: min1d/min7d/min30d, growthSign, minAge/maxAge URL-shareable, sort terbaru/velocity/1d/30d/likes, tabel unified rev 10, region verify
+- Out: threshold admin konfigurabel (fase 3)
+Acceptance:
+- [ ] filter AND konsisten staging + katalog
+- [ ] velocity = sales30d/30, terbaru = listed_on desc
+Links: <URL doc ini §7 §9>
+Subs: [catalog] filter parametrik URL; [catalog] sortir + kolom unified; [catalog] verify region semua produk
+
+[catalog] Akun Shopee + edit + copy link (label: feature)
+Goal: Field akun + edit non-metrik + copy ganda.
+Scope:
+- in: shopeeAccount string, dialog edit + audit, copy product + affiliate + toast
+- Out: edit metrik manual
+Acceptance:
+- [ ] akun tersimpan + tampil toggle
+- [ ] edit tercatat, metrik terkunci
+- [ ] copy keduanya bekerja
+Links: <URL doc ini §6 F7>
+Subs: [catalog] field akun + migrasi; [catalog] edit + copy link
+
+[ui] Halaman tools statis (label: feature)
+Goal: /dashboard/tools placeholder + menu.
+Scope:
+- in: route + komposisi + kartu placeholder, Sidebar Tools
+- Out: isi tools fungsional (menyusul)
+Acceptance:
+- [ ] /dashboard/tools tampil + menu ada
+Links: <URL doc ini §6 F10>
+Subs: (tanpa sub — flat, <4h)
+```
 
 ## 14. Open questions (tidak memblokir MVP)
 
