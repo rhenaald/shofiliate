@@ -128,7 +128,7 @@ export function useCompanionExtension() {
         }
 
         pendingRequests.current.set(requestId, {
-          resolve: (row: any) => resolve(row as RawImportRow),
+          resolve: (row: unknown) => resolve(row as RawImportRow),
           reject,
         });
 

@@ -22,10 +22,12 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
+import { useRouter } from "next/navigation";
 import {
   Copy,
   Pin,
   Download,
+  Trash2,
   ChevronDown,
   ChevronsLeft,
   ChevronLeft,
@@ -36,6 +38,7 @@ import {
 import { BulkActionBar } from "@/components/shared/data-table/bulk-action-bar";
 import { DataTableViewOptions } from "@/components/shared/data-table/view-options";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
@@ -55,6 +58,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
+import { exportCatalogToExcel } from "@/features/catalog/components/export-excel";
+import { deleteProducts } from "@/features/products/actions/delete-products";
 import {
   SORTABLE_COLUMNS,
   createProductColumns,
@@ -113,9 +118,37 @@ export function ProductTable({
   onClearFilters,
   isLoading = false,
 }: ProductTableProps) {
+  const router = useRouter();
+  const [deleteDialog, setDeleteDialog] = React.useState<{
+    open: boolean;
+    productIds: string[];
+    title: string;
+    description: string;
+  }>({
+    open: false,
+    productIds: [],
+    title: "",
+    description: "",
+  });
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  const handleDeleteSingle = React.useCallback((row: CatalogRow) => {
+    setDeleteDialog({
+      open: true,
+      productIds: [row.productId],
+      title: "Hapus Produk",
+      description: `Apakah Anda yakin ingin menghapus produk "${row.name}"? Tindakan ini tidak dapat dibatalkan.`,
+    });
+  }, []);
+
   const columns = React.useMemo(
-    () => createProductColumns(view, { sortId, sortDir, onSort: onSortChange }),
-    [view, sortId, sortDir, onSortChange],
+    () =>
+      createProductColumns(
+        view,
+        { sortId, sortDir, onSort: onSortChange },
+        handleDeleteSingle,
+      ),
+    [view, sortId, sortDir, onSortChange, handleDeleteSingle],
   );
   // Urutan baris adalah otoritas server (sort per view / ?sort&dir).
   // Sorting interaktif lokal dimatikan agar tidak menyesatkan (hanya 1 halaman terlihat).
@@ -193,6 +226,98 @@ export function ProductTable({
     setJumpKey(null);
   }
 
+  const handleBulkCopyLink = React.useCallback(() => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    if (selectedRows.length === 0) return;
+
+    const affiliateUrls = selectedRows
+      .map((r) => r.original.affiliateUrl?.trim())
+      .filter((url): url is string => Boolean(url && url.length > 0));
+
+    if (affiliateUrls.length === 0) {
+      toast.add({
+        type: "warning",
+        title: "Tidak ada link affiliate",
+        description: "Produk yang dipilih belum memiliki link affiliate.",
+      });
+      return;
+    }
+
+    navigator.clipboard.writeText(affiliateUrls.join("\n"));
+
+    if (affiliateUrls.length === selectedRows.length) {
+      toast.add({
+        type: "success",
+        title: `${affiliateUrls.length} link affiliate disalin`,
+        description: "Semua link affiliate berhasil disalin ke clipboard.",
+      });
+    } else {
+      toast.add({
+        type: "info",
+        title: `${affiliateUrls.length} link affiliate disalin`,
+        description: `${selectedRows.length - affiliateUrls.length} produk lainnya belum memiliki link affiliate.`,
+      });
+    }
+  }, [table]);
+
+  const handleBulkExport = React.useCallback(() => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    if (selectedRows.length === 0) return;
+
+    const rowsToExport = selectedRows.map((r) => r.original);
+    exportCatalogToExcel(rowsToExport, "katalog-produk-terpilih");
+    toast.add({
+      type: "success",
+      title: "Export Excel Berhasil",
+      description: `${rowsToExport.length} produk terpilih berhasil diunduh.`,
+    });
+  }, [table]);
+
+  const handleBulkDelete = React.useCallback(() => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    if (selectedRows.length === 0) return;
+
+    setDeleteDialog({
+      open: true,
+      productIds: selectedRows.map((r) => r.original.productId),
+      title: `Hapus ${selectedRows.length} Produk`,
+      description: `Apakah Anda yakin ingin menghapus ${selectedRows.length} produk terpilih secara permanen? Tindakan ini tidak dapat dibatalkan.`,
+    });
+  }, [table]);
+
+  const confirmDelete = React.useCallback(async () => {
+    if (deleteDialog.productIds.length === 0) return;
+
+    setIsDeleting(true);
+    try {
+      const res = await deleteProducts(deleteDialog.productIds);
+      if (res.success) {
+        toast.add({
+          type: "success",
+          title: "Produk Berhasil Dihapus",
+          description: `${res.count} produk telah dihapus dari katalog.`,
+        });
+        table.resetRowSelection();
+        setDeleteDialog((prev) => ({ ...prev, open: false }));
+        router.refresh();
+      } else {
+        toast.add({
+          type: "error",
+          title: "Gagal Menghapus",
+          description: res.error || "Terjadi kesalahan saat menghapus produk.",
+        });
+      }
+    } catch {
+      toast.add({
+        type: "error",
+        title: "Gagal Menghapus",
+        description: "Terjadi kesalahan koneksi atau server.",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteDialog.productIds, router, table]);
+
   const bulkActions = React.useMemo(
     () => [
       {
@@ -205,16 +330,23 @@ export function ProductTable({
         id: "copy-link",
         label: "Copy link",
         icon: Copy,
-        onClick: () => toast.add({ title: "Copy link — coming in SH-6" }),
+        onClick: handleBulkCopyLink,
       },
       {
         id: "export",
         label: "Export",
         icon: Download,
-        onClick: () => toast.add({ title: "Export — coming in SH-6" }),
+        onClick: handleBulkExport,
+      },
+      {
+        id: "delete",
+        label: "Delete",
+        icon: Trash2,
+        variant: "destructive" as const,
+        onClick: handleBulkDelete,
       },
     ],
-    [],
+    [handleBulkCopyLink, handleBulkExport, handleBulkDelete],
   );
 
   const activeColumnId =
@@ -223,7 +355,7 @@ export function ProductTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <DataTableViewOptions
           table={table}
           sortableColumns={SORTABLE_COLUMNS}
@@ -233,6 +365,29 @@ export function ProductTable({
           onSelectDirection={onSelectDirection}
           onClearSort={onClearSort}
         />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (data.length === 0) {
+              toast.add({
+                type: "warning",
+                title: "Tidak ada produk",
+                description: "Tidak ada data produk di halaman ini untuk diexport.",
+              });
+              return;
+            }
+            exportCatalogToExcel(data, `katalog-produk-${view}`);
+            toast.add({
+              type: "success",
+              title: "Export Excel Berhasil",
+              description: `${data.length} produk di halaman ini berhasil diunduh.`,
+            });
+          }}
+        >
+          <Download className="size-3.5 mr-1.5" />
+          Export Excel
+        </Button>
       </div>
       {/* FIXME: Table container x-overflow not fully contained within layout bounds. Investigate and constrain horizontal overflow properly. */}
       <ScrollArea className="w-full rounded-md border">
@@ -444,6 +599,19 @@ export function ProductTable({
         selectedCount={selectedCount}
         actions={bulkActions}
         onClear={() => table.resetRowSelection()}
+      />
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) =>
+          setDeleteDialog((prev) => ({ ...prev, open }))
+        }
+        title={deleteDialog.title}
+        description={deleteDialog.description}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="destructive"
+        isLoading={isDeleting}
+        onConfirm={confirmDelete}
       />
     </div>
   );

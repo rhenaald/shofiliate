@@ -1,12 +1,6 @@
 import { Suspense } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { ProductsView } from "@/features/catalog/components/products-view";
 import type { ListProductsResult } from "@/features/catalog/types";
 import type { CatalogParams } from "@/features/catalog/schemas";
@@ -17,19 +11,13 @@ function formatBatchDate(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const METHODOLOGY =
-  "Best = total penjualan all-time tertinggi (total_sales). " +
-  "Trending = velocity: sales_30d tertinggi lalu growth_30d, syarat sales_30d ≥ 10. " +
-  "Peringkat dari snapshot terakhir, bukan real-time.";
-
 interface ProductsPageProps {
   params: CatalogParams;
   result: ListProductsResult;
-  progress: { count: number; target: number };
+  progress?: { count: number; target: number };
 }
 
-export function ProductsPage({ params, result, progress }: ProductsPageProps) {
-  const remaining = Math.max(progress.target - progress.count, 0);
+export function ProductsPage({ params, result }: ProductsPageProps) {
   return (
     <div className="space-y-4 p-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -42,25 +30,12 @@ export function ProductsPage({ params, result, progress }: ProductsPageProps) {
               : ""}
             {` · Region ${params.region}`}
           </p>
-          <p className="text-sm font-semibold tabular-nums">
-            {progress.count}/{progress.target} hari ini
-            <span className="font-normal text-muted-foreground">
-              {remaining > 0 ? ` · sisa ${remaining}` : " · target tercapai"}
-            </span>
+        </div>
+        {result.batch ? (
+          <p className="text-xs text-muted-foreground">
+            Data per: {formatBatchDate(result.batch.createdAt)}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {result.batch ? (
-            <p className="text-xs text-muted-foreground">
-              Data per: {formatBatchDate(result.batch.createdAt)} (batch #
-              {result.batch.id.slice(0, 8)} · {result.batch.fileName})
-            </p>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm">Lihat metodologi</Button>} />
-            <TooltipContent className="max-w-80">{METHODOLOGY}</TooltipContent>
-          </Tooltip>
-        </div>
+        ) : null}
       </div>
       <Suspense
         fallback={
