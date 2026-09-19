@@ -82,7 +82,7 @@ export function ImportResult({ result, onReset }: ImportResultProps) {
               size="sm"
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               nativeButton={false}
-              render={<Link href="/dashboard/products" />}
+              render={<Link href="/dashboard/catalog" />}
             >
               Lihat di Katalog
             </Button>

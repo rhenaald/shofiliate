@@ -5,63 +5,117 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Shofiliate Companion</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      width: 280px;
+      width: 290px;
       margin: 0;
-      padding: 16px;
-      background-color: #0f172a;
-      color: #f8fafc;
+      padding: 14px;
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      font-size: 12px;
     }
     .header {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
       margin-bottom: 12px;
-      border-bottom: 1px solid #334155;
+      border-bottom: 1px solid #1e293b;
       padding-bottom: 8px;
     }
-    .header h1 {
-      font-size: 14px;
-      font-weight: 600;
-      margin: 0;
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 700;
       color: #38bdf8;
     }
-    .status-box {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 10px;
-      font-size: 12px;
-      margin-bottom: 12px;
-    }
-    .status-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    .status-row:last-child {
-      margin-bottom: 0;
-    }
-    .badge {
+    .btn-refresh {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 11px;
       padding: 2px 6px;
       border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .btn-refresh:hover {
+      background: #1e293b;
+      color: #f1f5f9;
+    }
+    .card {
+      background: #131c2e;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 9999px;
       font-size: 10px;
       font-weight: 600;
     }
-    .badge-ok {
-      background: #14532d;
+    .status-online {
+      background: rgba(34, 197, 94, 0.15);
       color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
     }
-    .badge-warn {
-      background: #78350f;
-      color: #fde047;
+    .status-offline {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
     }
-    .btn {
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-online { background: #22c55e; }
+    .dot-offline { background: #f59e0b; }
+    .session-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .session-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .session-item:first-child {
+      padding-top: 0;
+    }
+    .session-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .session-country {
+      font-weight: 600;
+      font-size: 11px;
+      color: #f8fafc;
+    }
+    .session-user {
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .btn-primary {
       display: block;
       width: 100%;
       text-align: center;
-      padding: 8px;
+      padding: 8px 10px;
       background: #0284c7;
       color: white;
       border: none;
@@ -70,40 +124,70 @@
       font-weight: 600;
       cursor: pointer;
       text-decoration: none;
-      box-sizing: border-box;
+      margin-top: 6px;
+      transition: background 0.15s ease;
     }
-    .btn:hover {
+    .btn-primary:hover {
       background: #0369a1;
+    }
+    .select-dropdown {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #f8fafc;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      margin-top: 4px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      outline: none;
+    }
+    .select-dropdown:focus {
+      border-color: #0284c7;
+    }
+    .other-section {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #1e293b;
+    }
+    .other-label {
+      font-size: 10px;
+      color: #94a3b8;
+      margin-bottom: 4px;
     }
     .note {
       font-size: 10px;
-      color: #94a3b8;
+      color: #64748b;
       margin-top: 8px;
       line-height: 1.4;
+    }
+    .loading-state {
+      text-align: center;
+      padding: 16px 0;
+      color: #94a3b8;
+      font-size: 11px;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>⚡ Shofiliate Companion</h1>
-  </div>
-  
-  <div class="status-box">
-    <div class="status-row">
-      <span>Shopee MY:</span>
-      <span id="status-my" class="badge badge-warn">Mengecek...</span>
+    <div class="header-title">
+      <span>⚡</span> Shofiliate Companion
     </div>
-    <div class="status-row">
-      <span>Shopee ID:</span>
-      <span id="status-id" class="badge badge-warn">Mengecek...</span>
-    </div>
+    <button id="btn-refresh" class="btn-refresh" title="Muat ulang status">
+      ↻ Cek Ulang
+    </button>
   </div>
 
-  <a href="https://affiliate.shopee.com.my" target="_blank" class="btn" style="margin-bottom: 6px;">Buka Shopee Affiliate (MY)</a>
-  <a href="https://affiliate.shopee.co.id" target="_blank" class="btn">Buka Shopee Affiliate (ID)</a>
+  <div id="app-container">
+    <div class="loading-state">
+      Memeriksa sesi login Shopee Affiliate...
+    </div>
+  </div>
 
   <div class="note">
-    💡 Pastikan Anda sudah login di portal Shopee Affiliate agar auto-enrichment komisi & link berfungsi saat upload file di web Shofiliate.
+    💡 Login di salah satu portal Shopee Affiliate, maka ekstensi akan otomatis mendeteksi dan mengaitkan akun Anda.
   </div>
 
   <script src="popup.js"></script>

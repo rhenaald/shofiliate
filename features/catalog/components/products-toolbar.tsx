@@ -136,7 +136,11 @@ export function ProductsToolbar() {
         >
           Lihat Pins
         </Button>
-        <Button variant="outline" size="sm" disabled title="Segera hadir di SH-7">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push("/dashboard/products/import")}
+        >
           Import
         </Button>
         <Button variant="outline" size="sm" disabled title="Segera hadir di SH-8">

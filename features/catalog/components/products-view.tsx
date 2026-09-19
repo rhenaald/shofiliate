@@ -53,6 +53,16 @@ export function ProductsView({ dtos, total, page, pageSize, view }: ProductsView
     }
   }
 
+  function handleSortDirection(dir: "asc" | "desc") {
+    const sid = sortId ?? VIEW_DEFAULT_SORT[view]?.id ?? null;
+    if (!sid) return;
+    replace({ sort: sid, dir });
+  }
+
+  function handleClearSort() {
+    replace({ sort: null, dir: null });
+  }
+
   function replace(updates: Parameters<typeof catalogHref>[2], resetPage = true) {
     router.replace(
       catalogHref(pathname, searchParams, {
@@ -93,6 +103,8 @@ export function ProductsView({ dtos, total, page, pageSize, view }: ProductsView
         sortId={sortId}
         sortDir={sortDir}
         onSortChange={handleSortChange}
+        onSelectDirection={handleSortDirection}
+        onClearSort={handleClearSort}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         onClearFilters={handleClearFilters}

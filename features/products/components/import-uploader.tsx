@@ -14,7 +14,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { useCompanionExtension } from "@/features/products/hooks/use-companion-extension";
-import type { RawImportRow } from "@/features/products/types";
+import type { RawImportRow, RegionCode } from "@/features/products/types";
 
 interface ImportUploaderProps {
   onFileLoaded: (fileName: string, rows: RawImportRow[]) => void;
@@ -28,7 +28,7 @@ export function ImportUploader({
   const [isDragging, setIsDragging] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [showExtensionGuide, setShowExtensionGuide] = React.useState(false);
-  const [batchRegion, setBatchRegion] = React.useState<"ID" | "MY">("ID");
+  const [batchRegion, setBatchRegion] = React.useState<RegionCode>("MY");
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const {
@@ -168,11 +168,15 @@ export function ImportUploader({
             <span className="text-muted-foreground font-medium">Region:</span>
             <select
               value={batchRegion}
-              onChange={(e) => setBatchRegion(e.target.value as "ID" | "MY")}
+              onChange={(e) => setBatchRegion(e.target.value as RegionCode)}
               className="rounded-lg border border-border/80 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-2xs focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
             >
-              <option value="ID">🇮🇩 Indonesia (ID)</option>
               <option value="MY">🇲🇾 Malaysia (MY)</option>
+              <option value="SG">🇸🇬 Singapura (SG)</option>
+              <option value="ID">🇮🇩 Indonesia (ID)</option>
+              <option value="TH">🇹🇭 Thailand (TH)</option>
+              <option value="PH">🇵🇭 Filipina (PH)</option>
+              <option value="VN">🇻🇳 Vietnam (VN)</option>
             </select>
           </div>
           {!isExtensionInstalled && (

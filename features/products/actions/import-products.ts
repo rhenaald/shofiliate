@@ -290,7 +290,7 @@ export async function importProducts(params: {
     },
   });
 
-  revalidatePath("/dashboard/products");
+  revalidatePath("/dashboard/catalog");
   revalidatePath("/dashboard/products/import");
 
   return {
