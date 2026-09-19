@@ -81,34 +81,24 @@ function resolveOrder(f: ResolvedCatalogFilters): Prisma.Sql {
   return Prisma.sql`${SORT_COLUMN_SQL[f.sort]} ${direction}${nulls}, latest."productId" DESC`;
 }
 
+export const MAX_CATALOG_PAGE = 200;
+
+export function normalizeCatalogParams(
+  f: ResolvedCatalogFilters
+): ResolvedCatalogFilters {
+  const q = f.q.trim().length >= 2 ? f.q.trim() : "";
+  return { ...f, q, page: Math.min(Math.max(f.page, 1), MAX_CATALOG_PAGE) };
+}
+
 function latestSnapshotQuery(f: ResolvedCatalogFilters): Prisma.Sql {
   return Prisma.sql`
-    SELECT DISTINCT ON (s."productId")
-      s."productId",
-      s."sales1d", s."sales7d", s."sales30d", s."growth30d",
-      s."gmv30d"::text AS "gmv30d",
-      s."gmv30d" AS "gmv30dRaw",
-      s."historicalSold",
-      s."totalGmv"::text AS "totalGmv",
-      s."likedCount", s."scrapedAt", s."batchId",
-      p."id" AS "pid",
-      p."region"::text AS "region",
-      p."itemId", p."shopId", p."name", p."url",
-      p."currency", p."shopName", p."category", p."listedOn",
-      p."affiliateUrl",
-      COALESCE(s."komisiXtraRate", p."komisiXtraRate") AS "komisiXtraRate",
-      COALESCE(s."commissionLiveAmount", p."commissionLiveAmount")::text AS "commissionLiveAmount",
-      COALESCE(s."commissionSocialAmount", p."commissionSocialAmount")::text AS "commissionSocialAmount",
-      COALESCE(s."commissionVideoAmount", p."commissionVideoAmount")::text AS "commissionVideoAmount"
-    FROM "ProductSnapshot" s
-    JOIN "Product" p ON p."id" = s."productId"
-    WHERE p."region" = CAST(${f.region} AS "Region")
+    SELECT * FROM catalog_latest
+    WHERE "region" = ${f.region}
       AND (
         ${f.q} = ''
-        OR p."name" ILIKE '%' || ${f.q} || '%'
-        OR p."shopName" ILIKE '%' || ${f.q} || '%'
+        OR "name" ILIKE '%' || ${f.q} || '%'
+        OR "shopName" ILIKE '%' || ${f.q} || '%'
       )
-    ORDER BY s."productId", s."scrapedAt" DESC, s."createdAt" DESC
   `;
 }
 
