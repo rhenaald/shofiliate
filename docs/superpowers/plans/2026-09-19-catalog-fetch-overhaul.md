@@ -23,7 +23,8 @@
 ## File map
 
 - Modify: `prisma/schema.prisma` — add `Product.latestSnapshotId` + relation.
-- New migration: `prisma/migrations/<stamp>_catalog_perf/` — pg_trgm, GIN, composite, partial indexes, `catalog_latest` MV + unique index.
+- New migration: `prisma/migrations/<stamp>_catalog_perf/` — pg_trgm, GIN, composite, partial indexes (Task 1).
+- New migration: `prisma/migrations/<stamp>_catalog_latest_mv/` — `catalog_latest` MV + unique + serving indexes (Task 3).
 - Modify: `features/products/actions/import-products.ts` — set pointers, refresh MV, per-region `revalidateTag`.
 - Modify: `features/catalog/data/catalog-query.ts` — read from MV, add `normalizeCatalogParams` (q guard, page clamp).
 - Modify: `features/catalog/data/list-products.ts` — delegate to cached fetchers in new file.
@@ -177,7 +178,7 @@ git commit -m "feat(sh-34): product latest-snapshot pointer with backfill"
 ### Task 3: SH-34 import maintains pointer + MV, per-region purge
 
 **Files:**
-- Modify: `prisma/migrations/<stamp>_catalog_perf/migration.sql` (append MV; apply with `pnpm db:migrate --name catalog_latest_mv`)
+- New: `prisma/migrations/<stamp>_catalog_latest_mv/migration.sql` (do NOT append to the Task 1 migration — it is already applied; create a fresh migration with `pnpm db:migrate --name catalog_latest_mv --create-only`)
 - Modify: `features/products/actions/import-products.ts:269-294`
 
 **Interfaces:**
