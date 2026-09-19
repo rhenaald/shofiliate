@@ -518,7 +518,7 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
             }`,
             variables: {
               linkParams: items.map((it) => {
-                let targetUrl = it.canonicalUrl || it.url;
+                let targetUrl = it.rawUrl || it.canonicalUrl || it.url;
                 if (targetUrl && !targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
                   targetUrl = "https://" + targetUrl;
                 }
@@ -559,99 +559,82 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
         const detailsPromises = items.map(async (it) => {
           try {
             const gqlUrl = `${tabOrigin}/api/v3/gql`;
-            const body = {
-              operationName: "productOfferV2",
-              query: `query productOfferV2($keyword: String, $page: Int, $limit: Int) {
-                productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
-                  nodes {
-                    itemId
-                    productName
-                    ratingStar
-                    commissionRate
-                    minCommission
-                    maxCommission
-                    price
-                    offerLink
-                    liveCommissionRate
-                    liveCommissionAmount
-                    socialCommissionRate
-                    socialCommissionAmount
-                    videoCommissionRate
-                    videoCommissionAmount
-                    hasKomisiXtra
-                    extraCommissionRate
-                    extraCommissionAmount
-                  }
-                }
-              }`,
-              variables: {
-                keyword: String(it.itemId),
-                page: 1,
-                limit: 1,
-              },
-            };
 
-            const res = await fetch(gqlUrl, {
-              method: "POST",
-              credentials: "include",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                "X-Requested-With": "XMLHttpRequest",
-              },
-              body: JSON.stringify(body),
-            });
-
-            if (res.ok) {
-              const json = await res.json();
-              if (json?.errors && !json?.data?.productOfferV2) {
-                const fallbackBody = {
-                  operationName: "productOfferV2",
-                  query: `query productOfferV2($keyword: String, $page: Int, $limit: Int) {
-                    productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
-                      nodes {
-                        itemId
-                        productName
-                        commissionRate
-                        minCommission
-                        maxCommission
-                        price
-                        offerLink
-                        liveCommissionRate
-                        liveCommissionAmount
-                        socialCommissionRate
-                        socialCommissionAmount
-                        videoCommissionRate
-                        videoCommissionAmount
-                        hasKomisiXtra
-                        extraCommissionRate
-                        extraCommissionAmount
-                      }
+            const runQuery = async (kw) => {
+              if (!kw) return null;
+              const body = {
+                operationName: "productOfferV2",
+                query: `query productOfferV2($keyword: String, $page: Int, $limit: Int) {
+                  productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
+                    nodes {
+                      itemId
+                      productName
+                      ratingStar
+                      commissionRate
+                      minCommission
+                      maxCommission
+                      price
+                      offerLink
+                      liveCommissionRate
+                      liveCommissionAmount
+                      socialCommissionRate
+                      socialCommissionAmount
+                      videoCommissionRate
+                      videoCommissionAmount
+                      hasKomisiXtra
+                      extraCommissionRate
+                      extraCommissionAmount
                     }
-                  }`,
-                  variables: { keyword: String(it.itemId), page: 1, limit: 1 },
-                };
-                const fallbackRes = await fetch(`${tabOrigin}/api/v3/gql`, {
-                  method: "POST",
-                  credentials: "include",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                    "X-Requested-With": "XMLHttpRequest",
-                  },
-                  body: JSON.stringify(fallbackBody),
-                });
-                if (fallbackRes.ok) {
-                  const fallbackJson = await fallbackRes.json();
-                  return fallbackJson?.data?.productOfferV2?.nodes?.[0] || null;
+                  }
+                }`,
+                variables: {
+                  keyword: kw,
+                  page: 1,
+                  limit: 5,
+                },
+              };
+
+              const res = await fetch(gqlUrl, {
+                method: "POST",
+                credentials: "include",
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                  "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify(body),
+              });
+
+              if (res.ok) {
+                const json = await res.json();
+                const nodes = json?.data?.productOfferV2?.nodes || [];
+                if (nodes.length > 0) {
+                  const matched = nodes.find((n) => String(n.itemId) === String(it.itemId));
+                  return matched || nodes[0] || null;
                 }
               }
-              return json?.data?.productOfferV2?.nodes?.[0] || null;
+              return null;
+            };
+
+            // Strategi 1: Cari dengan URL spesifik produk (Shopee Affiliate search mendukung pencarian link produk!)
+            let foundNode = null;
+            const targetUrl = it.rawUrl || it.canonicalUrl || it.url;
+            if (targetUrl) {
+              foundNode = await runQuery(targetUrl);
             }
+            // Strategi 2: Cari dengan itemId angka
+            if (!foundNode && it.itemId) {
+              foundNode = await runQuery(String(it.itemId));
+            }
+            // Strategi 3: Jika ada nama produk asli non-dummy, cari dengan kata kunci nama produk
+            if (!foundNode && it.row?.product_name && !it.row.product_name.startsWith("Dummy")) {
+              foundNode = await runQuery(it.row.product_name.slice(0, 45));
+            }
+
+            return foundNode;
           } catch (e) {
-            // ignore
+            return null;
           }
-          return null;
         });
 
         const detailsList = await Promise.all(detailsPromises);
@@ -766,54 +749,63 @@ function mergeItemData(originalRow, itemId, shortLink, node, productUrl, region)
     }
   }
 
-  return {
-    ...originalRow,
-    product_id: itemId,
-    product_name: originalRow.product_name || node?.productName || (itemId ? `Produk Shopee #${itemId}` : "Produk Shopee"),
-    seller_name: originalRow.seller_name || "Shopee Verified Seller",
-    product_url: originalRow.product_url || productUrl,
-    total_sales: originalRow.total_sales ?? 0,
-    sales_30d: originalRow.sales_30d ?? 0,
-    gmv_30d: originalRow.gmv_30d && originalRow.gmv_30d !== "-" ? originalRow.gmv_30d : priceStr,
-    growth_30d: originalRow.growth_30d ?? "0.0%",
+    const origName = originalRow.product_name || "";
+    const isDummyName = !origName || origName.toLowerCase().startsWith("dummy") || origName.startsWith("Produk Shopee #");
+    const finalName = (!isDummyName && origName)
+      ? origName
+      : (node?.productName || (itemId ? `Produk Shopee #${itemId}` : "Produk Shopee"));
 
-    rating: rating,
-    rating_star: rating,
+    const defaultBaseRate = 1;
+    const calcBaseAmt = price ? Math.round(price * 0.01) : 0;
 
-    commission_rate: (liveXtraRate + liveShopeeRate) || commRate || originalRow.commission_rate,
-    commission_amount: liveEstAmt || originalRow.commission_amount,
+    return {
+      ...originalRow,
+      product_id: itemId,
+      product_name: finalName,
+      seller_name: originalRow.seller_name || "Shopee Verified Seller",
+      product_url: originalRow.product_url || productUrl,
+      total_sales: originalRow.total_sales ?? 0,
+      sales_30d: originalRow.sales_30d ?? 0,
+      gmv_30d: originalRow.gmv_30d && originalRow.gmv_30d !== "-" ? originalRow.gmv_30d : priceStr,
+      growth_30d: originalRow.growth_30d ?? "0.0%",
 
-    commission_live_rate: (liveXtraRate + liveShopeeRate) || originalRow.commission_live_rate,
-    commission_live_amount: liveEstAmt || originalRow.commission_live_amount,
+      rating: rating,
+      rating_star: rating,
 
-    commission_social_rate: (socialXtraRate + socialShopeeRate) || originalRow.commission_social_rate,
-    commission_social_amount: socialEstAmt || originalRow.commission_social_amount,
+      commission_rate: (liveXtraRate + liveShopeeRate) || commRate || originalRow.commission_rate || defaultBaseRate,
+      commission_amount: liveEstAmt || originalRow.commission_amount || calcBaseAmt,
 
-    commission_video_rate: (videoXtraRate + videoShopeeRate) || originalRow.commission_video_rate,
-    commission_video_amount: videoEstAmt || originalRow.commission_video_amount,
+      commission_live_rate: (liveXtraRate + liveShopeeRate) || originalRow.commission_live_rate || defaultBaseRate,
+      commission_live_amount: liveEstAmt || originalRow.commission_live_amount || calcBaseAmt,
 
-    has_komisi_xtra: hasKomisiXtra,
-    komisi_xtra_rate: liveXtraRate || originalRow.komisi_xtra_rate,
-    komisi_xtra_amount: liveXtraAmt || originalRow.komisi_xtra_amount,
+      commission_social_rate: (socialXtraRate + socialShopeeRate) || originalRow.commission_social_rate || defaultBaseRate,
+      commission_social_amount: socialEstAmt || originalRow.commission_social_amount || calcBaseAmt,
 
-    commission_live_xtra_rate: liveXtraRate,
-    commission_live_xtra_amount: liveXtraAmt,
-    commission_live_shopee_rate: liveShopeeRate,
-    commission_live_shopee_amount: liveShopeeAmt,
+      commission_video_rate: (videoXtraRate + videoShopeeRate) || originalRow.commission_video_rate || defaultBaseRate,
+      commission_video_amount: videoEstAmt || originalRow.commission_video_amount || calcBaseAmt,
 
-    commission_social_xtra_rate: socialXtraRate,
-    commission_social_xtra_amount: socialXtraAmt,
-    commission_social_shopee_rate: socialShopeeRate,
-    commission_social_shopee_amount: socialShopeeAmt,
+      has_komisi_xtra: hasKomisiXtra,
+      komisi_xtra_rate: liveXtraRate || originalRow.komisi_xtra_rate || 0,
+      komisi_xtra_amount: liveXtraAmt || originalRow.komisi_xtra_amount || 0,
 
-    commission_video_xtra_rate: videoXtraRate,
-    commission_video_xtra_amount: videoXtraAmt,
-    commission_video_shopee_rate: videoShopeeRate,
-    commission_video_shopee_amount: videoShopeeAmt,
+      commission_live_xtra_rate: liveXtraRate,
+      commission_live_xtra_amount: liveXtraAmt,
+      commission_live_shopee_rate: liveShopeeRate,
+      commission_live_shopee_amount: liveShopeeAmt,
 
-    affiliate_link: affLink,
-    affiliate_url: affLink,
-  };
+      commission_social_xtra_rate: socialXtraRate,
+      commission_social_xtra_amount: socialXtraAmt,
+      commission_social_shopee_rate: socialShopeeRate,
+      commission_social_shopee_amount: socialShopeeAmt,
+
+      commission_video_xtra_rate: videoXtraRate,
+      commission_video_xtra_amount: videoXtraAmt,
+      commission_video_shopee_rate: videoShopeeRate,
+      commission_video_shopee_amount: videoShopeeAmt,
+
+      affiliate_link: affLink,
+      affiliate_url: affLink,
+    };
 }
 
 // Eksekusi enrichment untuk semua baris produk via Direct GraphQL API Batch di tab Shopee Affiliate aktif
@@ -999,11 +991,14 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
             const hasRealLink = shortLink && (shortLink.includes("s.shopee.") || shortLink.includes("shope.ee"));
             const hasCommission = node && (node.commissionRate !== undefined && node.commissionRate !== null);
 
+            if (shortLink) it.cachedShortLink = shortLink;
+            if (node) it.cachedNode = node;
+
             if (hasRealLink && hasCommission) {
               const merged = mergeItemData(it.row, it.itemId, shortLink, node, it.url, it.region);
               enrichedRows[it.idx] = merged;
               processedCount++;
-              sendProgress(processedCount, it.row.product_name || it.itemId);
+              sendProgress(processedCount, merged.product_name || it.itemId);
             } else {
               itemsNeedingAutomation.push(it);
             }
@@ -1016,31 +1011,108 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
       itemsNeedingAutomation.push(...validItems);
     }
 
-    // 5. Multi-Worker Reusable Tab Pool: Menjalankan tab paralel yang didaur ulang untuk sisa item
+    // 5. Periksa tab Shopee yang sedang aktif dibuka user + Worker Tab Pool
     if (itemsNeedingAutomation.length > 0) {
-      sendProgress(processedCount, `Menjalankan Worker Paralel (${itemsNeedingAutomation.length} produk)...`);
+      sendProgress(processedCount, `Memeriksa tab Shopee Affiliate aktif...`);
 
-      const baseCompleted = processedCount;
-      const automatedResults = await enrichItemsWithWorkerPool(
-        itemsNeedingAutomation,
-        affDomain,
-        (doneInPool, statusText) => {
-          sendProgress(baseCompleted + doneInPool, statusText);
+      // 5.1 Cek apakah ada produk yang halamannya SUDAH DIBUKA di tab browser user!
+      try {
+        const allOpenTabs = await chrome.tabs.query({});
+        for (let i = itemsNeedingAutomation.length - 1; i >= 0; i--) {
+          const it = itemsNeedingAutomation[i];
+          const matchedTab = allOpenTabs.find(
+            (t) => (t.url || "").includes("affiliate.shopee.") && (t.url || "").includes(String(it.itemId))
+          );
+          if (matchedTab?.id) {
+            try {
+              const res = await chrome.scripting.executeScript({
+                target: { tabId: matchedTab.id },
+                func: runAutomateInPage,
+                args: [it.itemId],
+              });
+              const data = res?.[0]?.result;
+              if (
+                data &&
+                !data.notFound &&
+                (data.live || data.social || data.video || data.affiliateLink || (data.price && data.price > 0))
+              ) {
+                const formatted = formatProductResult(data, it.region);
+                const finalLink = formatted.affiliate_link || it.cachedShortLink || it.row.affiliate_link || "";
+                enrichedRows[it.idx] = {
+                  ...it.row,
+                  ...formatted,
+                  affiliate_link: finalLink,
+                  affiliate_url: finalLink,
+                };
+                processedCount++;
+                sendProgress(processedCount, formatted.product_name || it.itemId);
+                itemsNeedingAutomation.splice(i, 1);
+              }
+            } catch (err) {
+              console.warn("[Shofiliate] Open tab direct scrape error:", err);
+            }
+          }
         }
-      );
+      } catch (e) {}
 
-      itemsNeedingAutomation.forEach((it) => {
-        const autoData = automatedResults[it.itemId];
-        if (autoData) {
-          const formatted = formatProductResult(autoData, it.region);
-          enrichedRows[it.idx] = {
-            ...it.row,
-            ...formatted,
-          };
-        } else {
-          enrichedRows[it.idx] = it.row;
-        }
-      });
+      // 5.2 Jalankan Multi-Worker Tab Pool untuk sisa item
+      if (itemsNeedingAutomation.length > 0) {
+        sendProgress(processedCount, `Menjalankan Worker Paralel (${itemsNeedingAutomation.length} produk)...`);
+
+        const baseCompleted = processedCount;
+        const automatedResults = await enrichItemsWithWorkerPool(
+          itemsNeedingAutomation,
+          affDomain,
+          (doneInPool, statusText) => {
+            sendProgress(baseCompleted + doneInPool, statusText);
+          }
+        );
+
+        itemsNeedingAutomation.forEach((it) => {
+          const autoData = automatedResults[it.itemId];
+          const shortLink = autoData?.affiliateLink || it.cachedShortLink || it.row.affiliate_link || "";
+          const node = it.cachedNode || null;
+
+          if (
+            autoData &&
+            !autoData.notFound &&
+            (autoData.live || autoData.social || autoData.video || autoData.affiliateLink || (autoData.price && autoData.price > 0))
+          ) {
+            const formatted = formatProductResult(autoData, it.region);
+            const finalLink = formatted.affiliate_link || shortLink;
+            enrichedRows[it.idx] = {
+              ...it.row,
+              ...formatted,
+              affiliate_link: finalLink,
+              affiliate_url: finalLink,
+            };
+          } else if (shortLink) {
+            // Produk reguler tanpa penawaran khusus seller di portal affiliate:
+            // Simpan produk dengan link affiliate resmi s.shopee.co.id dan komisi dasar Shopee!
+            const merged = mergeItemData(it.row, it.itemId, shortLink, node, it.url, it.region);
+            enrichedRows[it.idx] = {
+              ...it.row,
+              ...merged,
+              affiliate_link: shortLink,
+              affiliate_url: shortLink,
+            };
+          } else {
+            // Fallback universal tracking link (an_redir)
+            const mainDomain = REGION_MAIN_DOMAINS[it.region] || "shopee.co.id";
+            const targetUrl = it.canonicalUrl || it.url || `https://${mainDomain}/product/0/${it.itemId}`;
+            const fallbackLink = `https://${mainDomain}/universal-link?redir=${encodeURIComponent(
+              targetUrl
+            )}&utm_source=an_shofiliate&an_redir=1`;
+            const merged = mergeItemData(it.row, it.itemId, fallbackLink, node, it.url, it.region);
+            enrichedRows[it.idx] = {
+              ...it.row,
+              ...merged,
+              affiliate_link: fallbackLink,
+              affiliate_url: fallbackLink,
+            };
+          }
+        });
+      }
     }
   } finally {
     // Tutup tab sementara jika kita yang membuatnya
@@ -1237,8 +1309,7 @@ async function runAutomateInPage(targetItemId) {
     pageText.includes("penawaran telah berakhir") ||
     pageText.includes("item not found") ||
     pageText.includes("offer not found") ||
-    pageText.includes("halaman tidak ditemukan") ||
-    pageText.includes("404");
+    ((pageText.includes("halaman tidak ditemukan") || pageText.includes("page not found")) && /\b404\b/.test(pageText));
 
   if (isNotFound) {
     return {
@@ -1758,8 +1829,7 @@ function formatProductResult(d, region = "ID") {
   if (d.notFound) {
     return {
       product_id: itemId,
-      affiliate_link: "",
-      affiliate_url: "",
+      notFound: true,
     };
   }
 
@@ -1798,6 +1868,9 @@ function formatProductResult(d, region = "ID") {
   const sym = currencySymbols[region] || "Rp";
   const priceStr = d.price ? `${sym} ${d.price.toLocaleString("id-ID")}` : `${sym} 0`;
 
+  const defaultBaseRate = (liveXtraRate + liveShopeeRate) || 1;
+  const defaultBaseAmt = liveEstAmt || (d.price ? Math.round(d.price * 0.01) : 0);
+
   return {
     product_id: itemId,
     product_name: d.productName || (itemId ? `Produk Shopee #${itemId}` : "Produk Shopee"),
@@ -1809,17 +1882,17 @@ function formatProductResult(d, region = "ID") {
     growth_30d: "0.0%",
     rating: d.rating ?? null,
     rating_star: d.rating ?? null,
-    commission_rate: liveXtraRate + liveShopeeRate,
-    commission_amount: liveEstAmt,
-    commission_live_rate: liveXtraRate + liveShopeeRate,
-    commission_live_amount: liveEstAmt,
-    commission_social_rate: socialXtraRate + socialShopeeRate,
-    commission_social_amount: socialEstAmt,
-    commission_video_rate: videoXtraRate + videoShopeeRate,
-    commission_video_amount: videoEstAmt,
+    commission_rate: defaultBaseRate,
+    commission_amount: defaultBaseAmt,
+    commission_live_rate: defaultBaseRate,
+    commission_live_amount: defaultBaseAmt,
+    commission_social_rate: (socialXtraRate + socialShopeeRate) || defaultBaseRate,
+    commission_social_amount: socialEstAmt || defaultBaseAmt,
+    commission_video_rate: (videoXtraRate + videoShopeeRate) || defaultBaseRate,
+    commission_video_amount: videoEstAmt || defaultBaseAmt,
     has_komisi_xtra: liveXtraRate > 0 || socialXtraRate > 0 || videoXtraRate > 0,
-    komisi_xtra_rate: liveXtraRate || socialXtraRate || videoXtraRate,
-    komisi_xtra_amount: liveXtraAmt || socialXtraAmt || videoXtraAmt,
+    komisi_xtra_rate: liveXtraRate || socialXtraRate || videoXtraRate || 0,
+    komisi_xtra_amount: liveXtraAmt || socialXtraAmt || videoXtraAmt || 0,
 
     commission_live_xtra_rate: liveXtraRate,
     commission_live_xtra_amount: liveXtraAmt,
@@ -1837,6 +1910,7 @@ function formatProductResult(d, region = "ID") {
     commission_video_shopee_amount: videoShopeeAmt,
 
     affiliate_link: affLink,
+    affiliate_url: affLink,
   };
 }
 
