@@ -27,6 +27,11 @@ export type RawImportRow = {
   komisi_xtra_amount?: string | number | null;
   affiliate_link?: string | null;
   affiliate_url?: string | null;
+  rating?: string | number | null;
+  rating_star?: string | number | null;
+  score?: string | number | null;
+  product_rating?: string | number | null;
+  shop_rating?: string | number | null;
   [key: string]: unknown;
 };
 
@@ -51,6 +56,7 @@ export type ParsedProductRow = {
   gmv30d: number;
   historicalSold: number;
   totalGmv: number;
+  rating: number | null;
   commissionRate: number | null;
   commissionAmount: number | null;
   commissionLiveRate: number | null;

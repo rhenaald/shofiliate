@@ -144,6 +144,7 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
   let hasKomisiXtra = false;
   let komisiXtraRate = null;
   let komisiXtraAmount = null;
+  let rating = null;
 
   // 1. Request real custom link via GraphQL batchGetCustomLink
   try {
@@ -161,9 +162,7 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
         linkParams: [
           {
             originalLink: productUrl,
-            advancedLinkParams: {
-              subId1: "shofiliate",
-            },
+            advancedLinkParams: { subId1: "shofiliate" },
           },
         ],
         sourceCaller: "CUSTOM_LINK_CALLER",
@@ -183,16 +182,16 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
 
     if (res.ok) {
       const data = await res.json();
-      const linkObj = data?.data?.batchCustomLink?.[0];
-      if (linkObj && linkObj.shortLink) {
-        affiliateLink = linkObj.shortLink;
+      const first = data?.data?.batchCustomLink?.[0];
+      if (first && first.shortLink) {
+        affiliateLink = first.shortLink;
       }
     }
   } catch (e) {
     // Fallback silent
   }
 
-  // 2. Coba ambil rincian komisi (Live, Sosmed, Video, Xtra) via productOfferV2 / search
+  // 2. Request commission rate & nominal via GraphQL productOfferV2
   try {
     const gqlUrl = `https://${domain}/api/v3/gql`;
     const body = {
@@ -201,6 +200,7 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
         productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
           nodes {
             itemId
+            ratingStar
             commissionRate
             minCommission
             maxCommission
@@ -289,6 +289,14 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
         if (!affiliateLink && node.offerLink) {
           affiliateLink = node.offerLink;
         }
+
+        const rawR = node.ratingStar !== undefined && node.ratingStar !== null ? node.ratingStar : null;
+        if (rawR !== null) {
+          const numR = parseFloat(rawR);
+          if (!isNaN(numR) && numR > 0) {
+            rating = numR <= 5 ? Math.round(numR * 10) / 10 : (numR <= 50 ? Math.round((numR / 10) * 10) / 10 : 5);
+          }
+        }
       }
     }
   } catch (e) {
@@ -304,6 +312,8 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
 
   return {
     affiliate_link: affiliateLink,
+    rating: rating,
+    rating_star: rating,
     commission_rate: commissionRate,
     commission_amount: commissionAmount,
     commission_live_rate: commissionLiveRate,
@@ -413,6 +423,7 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
                   nodes {
                     itemId
                     productName
+                    ratingStar
                     commissionRate
                     minCommission
                     maxCommission
@@ -553,6 +564,16 @@ function mergeItemData(originalRow, itemId, shortLink, node, productUrl, region)
 
   const affLink = shortLink || originalRow.affiliate_link || originalRow.affiliate_url || null;
 
+  // Ekstraksi rating (dari GraphQL Shopee atau baris import Shopdora)
+  const rawRating = node?.ratingStar ?? node?.rating ?? originalRow.rating ?? originalRow.rating_star ?? originalRow.score ?? originalRow.product_rating ?? originalRow.shop_rating ?? null;
+  let rating = null;
+  if (rawRating !== null && rawRating !== undefined && rawRating !== "" && rawRating !== "-") {
+    const parsedR = typeof rawRating === "number" ? rawRating : parseFloat(String(rawRating).replace(",", "."));
+    if (!isNaN(parsedR) && parsedR > 0) {
+      rating = parsedR <= 5 ? Math.round(parsedR * 10) / 10 : (parsedR <= 50 ? Math.round((parsedR / 10) * 10) / 10 : 5);
+    }
+  }
+
   return {
     ...originalRow,
     product_id: itemId,
@@ -563,6 +584,9 @@ function mergeItemData(originalRow, itemId, shortLink, node, productUrl, region)
     sales_30d: originalRow.sales_30d ?? 0,
     gmv_30d: originalRow.gmv_30d && originalRow.gmv_30d !== "-" ? originalRow.gmv_30d : priceStr,
     growth_30d: originalRow.growth_30d ?? "0.0%",
+
+    rating: rating,
+    rating_star: rating,
 
     commission_rate: (liveXtraRate + liveShopeeRate) || commRate || originalRow.commission_rate,
     commission_amount: liveEstAmt || originalRow.commission_amount,

@@ -116,6 +116,7 @@ model Product {
   affiliateUrl     String?
   commissionRate   Float?
   commissionAmount Decimal? @db.Decimal(12, 2)
+  rating           Float?
 
   // Kanal Komisi Shopee Affiliate
   commissionLiveRate     Float?
@@ -158,6 +159,7 @@ model ProductSnapshot {
   likedCount     Int          @default(0)
   commissionRate   Float?
   commissionAmount Decimal?   @db.Decimal(12, 2)
+  rating           Float?
 
   // Kanal Komisi Shopee Affiliate Snapshot
   commissionLiveRate     Float?

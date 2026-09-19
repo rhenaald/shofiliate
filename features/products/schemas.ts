@@ -58,6 +58,11 @@ export const rawImportRowSchema = z.object({
   komisi_xtra_amount: z.union([z.string(), z.number()]).optional().nullable(),
   affiliate_link: z.string().optional().nullable(),
   affiliate_url: z.string().optional().nullable(),
+  rating: z.union([z.string(), z.number()]).optional().nullable(),
+  rating_star: z.union([z.string(), z.number()]).optional().nullable(),
+  score: z.union([z.string(), z.number()]).optional().nullable(),
+  product_rating: z.union([z.string(), z.number()]).optional().nullable(),
+  shop_rating: z.union([z.string(), z.number()]).optional().nullable(),
 }).refine((data) => !!(data.product_url || data.url), {
   message: "product_url or url is required",
   path: ["product_url"],
@@ -146,6 +151,25 @@ export function parseCommissionAmount(
   if (!str || str === "-" || str === "null" || str === "undefined") return null;
   const parsed = parseCurrencyAndAmount(str, fallbackRegion);
   return parsed.amount > 0 ? parsed.amount : null;
+}
+
+export function parseRatingSafe(val: unknown): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "number") {
+    if (isNaN(val)) return null;
+    if (val <= 0) return null;
+    if (val <= 5) return Math.round(val * 10) / 10;
+    if (val <= 50) return Math.round((val / 10) * 10) / 10;
+    if (val <= 100) return Math.round((val / 20) * 10) / 10;
+    return 5;
+  }
+  const str = String(val).trim();
+  if (!str || str === "-" || str === "null" || str === "undefined") return null;
+  const match = str.replace(",", ".").match(/([0-5](?:\.\d+)?)/);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  if (isNaN(num) || num <= 0) return null;
+  return Math.min(5, Math.max(0, Math.round(num * 10) / 10));
 }
 
 export function detectRegionFromUrl(url: string): {
@@ -317,6 +341,14 @@ export function parseImportRow(
   const komisiXtraRate = parseCommissionRate(raw.komisi_xtra_rate);
   const komisiXtraAmount = parseCommissionAmount(raw.komisi_xtra_amount, region);
 
+  const rating = parseRatingSafe(
+    raw.rating ??
+    raw.rating_star ??
+    raw.score ??
+    raw.product_rating ??
+    raw.shop_rating
+  );
+
   const parsedRow: ParsedProductRow = {
     itemId,
     shopId,
@@ -336,6 +368,7 @@ export function parseImportRow(
     gmv30d,
     historicalSold: parseIntegerSafe(raw.total_sales),
     totalGmv,
+    rating,
     commissionRate,
     commissionAmount,
     commissionLiveRate,

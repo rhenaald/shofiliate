@@ -41,6 +41,7 @@ export interface CatalogSqlRow {
   shopName: string;
   category: string;
   listedOn: Date | null;
+  rating: number | null;
   affiliateUrl: string | null;
   komisiXtraRate: number | null;
   commissionLiveAmount: string | null;
@@ -64,6 +65,7 @@ const VIEW_ORDER: Record<CatalogView, Prisma.Sql> = {
 
 const SORT_COLUMN_SQL: Record<CatalogSortId, Prisma.Sql> = {
   name: Prisma.sql`latest."name"`,
+  rating: Prisma.sql`latest."rating"`,
   likes: Prisma.sql`latest."likedCount"`,
   sales30d: Prisma.sql`latest."sales30d"`,
   growth30d: Prisma.sql`latest."growth30d"`,
@@ -76,8 +78,11 @@ const SORT_COLUMN_SQL: Record<CatalogSortId, Prisma.Sql> = {
 function resolveOrder(f: ResolvedCatalogFilters): Prisma.Sql {
   if (!f.sort) return VIEW_ORDER[f.view];
   const direction = f.dir === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
-  // listedOn nullable: NULLS LAST di kedua arah agar "tak diketahui" tak ke atas.
-  const nulls = f.sort === "listedOn" ? Prisma.sql` NULLS LAST` : Prisma.empty;
+  // listedOn dan rating nullable: NULLS LAST di kedua arah agar data tak diketahui tak ke atas.
+  const nulls =
+    f.sort === "listedOn" || f.sort === "rating"
+      ? Prisma.sql` NULLS LAST`
+      : Prisma.empty;
   return Prisma.sql`${SORT_COLUMN_SQL[f.sort]} ${direction}${nulls}, latest."productId" DESC`;
 }
 
@@ -134,6 +139,7 @@ export function toDTO(r: CatalogSqlRow): CatalogProductDTO {
     shopName: r.shopName,
     category: r.category,
     listedOn: r.listedOn ? r.listedOn.toISOString() : null,
+    rating: r.rating !== null && r.rating !== undefined ? Number(r.rating) : null,
     sales1d: r.sales1d,
     sales7d: r.sales7d,
     sales30d: r.sales30d,

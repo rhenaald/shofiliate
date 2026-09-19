@@ -14,6 +14,7 @@ import {
   Loader2,
   Pin,
   Sparkles,
+  Star,
   Trash2,
 } from "lucide-react";
 
@@ -157,6 +158,24 @@ export function createProductColumns(
         </span>
       ),
       sortFn: sortFn_text,
+    },
+    {
+      id: "rating",
+      accessorKey: "rating",
+      ...header("rating", "Rating", "right"),
+      cell: ({ row }) => {
+        const val = row.original.rating;
+        if (val === null || val === undefined || val <= 0) {
+          return <span className="block text-right text-muted-foreground">-</span>;
+        }
+        return (
+          <div className="flex items-center justify-end gap-1 font-medium tabular-nums text-foreground">
+            <Star className="size-3.5 fill-amber-400 text-amber-400" />
+            <span>{val.toFixed(1)}</span>
+          </div>
+        );
+      },
+      sortFn: sortFn_alphanumeric,
     },
     {
       id: "komisiXtra",
