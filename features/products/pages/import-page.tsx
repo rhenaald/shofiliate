@@ -2,7 +2,8 @@
 
 import * as React from "react";
 
-import { createStagingFile, saveStaging } from "@/features/products/actions/staging";
+import { createStagingFile, removeStagingRows, saveStaging } from "@/features/products/actions/staging";
+import { stagingDeleteToast } from "@/features/products/components/staging-table";
 import { ImportResult } from "@/features/products/components/import-result";
 import { ImportUploader } from "@/features/products/components/import-uploader";
 import { StagingTable } from "@/features/products/components/staging-table";
@@ -64,6 +65,20 @@ export function ImportPageComposition() {
     }
   };
 
+  const handleBulkDelete = async (ids: string[]) => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const res = await removeStagingRows({ ids });
+      stagingDeleteToast(res.removed);
+      await reloadStaging();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan saat menghapus.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleReset = () => {
     setStep("upload");
     setStaging([]);
@@ -92,7 +107,7 @@ export function ImportPageComposition() {
             <span>{error}</span>
           </div>
         )}
-        <StagingTable data={staging} onSaveSelected={handleSaveSelected} onSaveAll={handleSaveAll} isSaving={isSaving} />
+        <StagingTable data={staging} onSaveSelected={handleSaveSelected} onSaveAll={handleSaveAll} onBulkDelete={handleBulkDelete} isSaving={isSaving} />
       </div>
     );
   if (step === "result" && result) return <ImportResult result={result} onReset={handleReset} />;

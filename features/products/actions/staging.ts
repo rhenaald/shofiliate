@@ -75,3 +75,39 @@ export async function saveStaging(params: { fileIds?: string[]; selectedIds?: st
   }
   return { ...result, stagingFileIds: fileIds };
 }
+
+function stripStagingKeys<T extends Record<string, unknown>>(row: T): RawImportRow {
+  const copy: Record<string, unknown> = { ...row };
+  for (const k of STRIP_KEYS) delete copy[k];
+  return copy as RawImportRow;
+}
+
+export async function removeStagingRows(params: { ids: string[] }): Promise<{ removed: number }> {
+  const session = await requireSession();
+  const ids = new Set(Array.isArray(params.ids) ? params.ids : []);
+  if (ids.size === 0) return { removed: 0 };
+  const union = await getStagingUnion(session.user.id);
+  const byFile = new Map<string, typeof union>();
+  for (const r of union) {
+    const list = byFile.get(r._fileId);
+    if (list) list.push(r);
+    else byFile.set(r._fileId, [r]);
+  }
+  let removed = 0;
+  for (const [fileId, rows] of byFile) {
+    const kept = rows.filter((r) => !ids.has(r._stagingId));
+    if (kept.length === rows.length) continue;
+    removed += rows.length - kept.length;
+    const rawRows = kept.map(stripStagingKeys);
+    await prisma.importStagingFile.update({
+      where: { id: fileId },
+      data: {
+        rows: JSON.parse(JSON.stringify(rawRows)),
+        rowCount: rawRows.length,
+        enrichedCount: rawRows.filter((r) => Boolean(r.affiliate_link || r.affiliate_url)).length,
+      },
+    });
+  }
+  revalidatePath("/dashboard/products/import");
+  return { removed };
+}
