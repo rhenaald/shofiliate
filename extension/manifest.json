@@ -13,17 +13,7 @@
     "cookies"
   ],
   "host_permissions": [
-    "https://*.shopee.co.id/*",
-    "https://*.shopee.com.my/*",
-    "https://*.shopee.sg/*",
-    "https://*.shopee.ph/*",
-    "https://*.shopee.vn/*",
-    "https://*.shopee.co.th/*",
-    "http://localhost/*",
-    "http://localhost:*/*",
-    "http://127.0.0.1/*",
-    "http://127.0.0.1:*/*",
-    "https://*/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
@@ -31,11 +21,7 @@
   "content_scripts": [
     {
       "matches": [
-        "http://localhost/*",
-        "http://localhost:*/*",
-        "http://127.0.0.1/*",
-        "http://127.0.0.1:*/*",
-        "https://*/*"
+        "<all_urls>"
       ],
       "js": [
         "content.js"

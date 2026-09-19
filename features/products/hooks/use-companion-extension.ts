@@ -11,7 +11,16 @@ export interface EnrichProgress {
 }
 
 export function useCompanionExtension() {
-  const [isExtensionInstalled, setIsExtensionInstalled] = React.useState<boolean>(false);
+  const [isExtensionInstalled, setIsExtensionInstalled] = React.useState<boolean>(() => {
+    if (typeof document !== "undefined") {
+      return (
+        document.documentElement.getAttribute("data-shofiliate-extension-installed") === "true" ||
+        document.documentElement.dataset.shofiliateExtensionInstalled === "true" ||
+        Boolean((window as unknown as { __SHOFILIATE_EXTENSION_INSTALLED__?: boolean }).__SHOFILIATE_EXTENSION_INSTALLED__)
+      );
+    }
+    return false;
+  });
   const [isEnriching, setIsEnriching] = React.useState<boolean>(false);
   const [progress, setProgress] = React.useState<EnrichProgress | null>(null);
   const [enrichError, setEnrichError] = React.useState<string | null>(null);
@@ -26,10 +35,32 @@ export function useCompanionExtension() {
     >
   >(new Map());
 
-  // Deteksi ekstensi saat pertama kali load via postMessage PING/PONG
+  // Deteksi ekstensi saat pertama kali load via DOM attribute, CustomEvent, dan postMessage PING/PONG
   React.useEffect(() => {
-    // Ping ekstensi secara berkala di awal (ekstensi merespons dengan PONG)
+    // 1. Cek langsung keberadaan atribut DOM yang ditandai content script
+    const checkDomPresence = () => {
+      if (
+        document.documentElement.getAttribute("data-shofiliate-extension-installed") === "true" ||
+        document.documentElement.dataset.shofiliateExtensionInstalled === "true" ||
+        Boolean((window as unknown as { __SHOFILIATE_EXTENSION_INSTALLED__?: boolean }).__SHOFILIATE_EXTENSION_INSTALLED__)
+      ) {
+        setIsExtensionInstalled(true);
+        return true;
+      }
+      return false;
+    };
+
+    checkDomPresence();
+
+    // 2. Dengarkan custom event yang ditembakkan saat content script siap
+    const handleCustomReady = () => {
+      setIsExtensionInstalled(true);
+    };
+    window.addEventListener("shofiliate-extension-ready", handleCustomReady);
+
+    // 3. Ping ekstensi secara berkala di awal (ekstensi merespons dengan PONG)
     const pingInterval = setInterval(() => {
+      if (checkDomPresence()) return;
       window.postMessage(
         {
           target: "shofiliate-companion-extension",
@@ -37,7 +68,7 @@ export function useCompanionExtension() {
         },
         "*"
       );
-    }, 600);
+    }, 400);
 
     const handleWindowMessage = (event: MessageEvent) => {
       if (event.source !== window || !event.data || typeof event.data !== "object") {
@@ -109,6 +140,7 @@ export function useCompanionExtension() {
     return () => {
       clearInterval(pingInterval);
       clearTimeout(stopTimer);
+      window.removeEventListener("shofiliate-extension-ready", handleCustomReady);
       window.removeEventListener("message", handleWindowMessage);
     };
   }, []);

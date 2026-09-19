@@ -392,15 +392,14 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: async (items, domain) => {
-        // Cek jika diarahkan ke halaman login
-        if (window.location.pathname.includes("/login") || window.location.href.includes("login")) {
-          return { error: "NOT_LOGGED_IN" };
-        }
+        const tabOrigin = window.location.origin.includes("affiliate.shopee.")
+          ? window.location.origin
+          : `https://${domain}`;
 
         // 1. Batch generate shortlinks via batchGetCustomLink (1 request untuk semua item dalam batch)
         const shortLinksMap = {};
         try {
-          const gqlUrl = `https://${domain}/api/v3/gql?q=batchCustomLink`;
+          const gqlUrl = `${tabOrigin}/api/v3/gql?q=batchCustomLink`;
           const body = {
             operationName: "batchGetCustomLink",
             query: `query batchGetCustomLink($linkParams: [CustomLinkParam!], $sourceCaller: SourceCaller){
@@ -448,7 +447,7 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
         // 2. Fetch commission details in parallel for each item in batch via productOfferV2
         const detailsPromises = items.map(async (it) => {
           try {
-            const gqlUrl = `https://${domain}/api/v3/gql`;
+            const gqlUrl = `${tabOrigin}/api/v3/gql`;
             const body = {
               operationName: "productOfferV2",
               query: `query productOfferV2($keyword: String, $page: Int, $limit: Int) {
@@ -519,7 +518,7 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
                   }`,
                   variables: { keyword: String(it.itemId), page: 1, limit: 1 },
                 };
-                const fallbackRes = await fetch(gqlUrl, {
+                const fallbackRes = await fetch(`${tabOrigin}/api/v3/gql`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json", Accept: "application/json" },
                   body: JSON.stringify(fallbackBody),
@@ -632,7 +631,12 @@ function mergeItemData(originalRow, itemId, shortLink, node, productUrl, region)
     originalRow.has_komisi_xtra
   );
 
-  const affLink = shortLink || originalRow.affiliate_link || originalRow.affiliate_url || null;
+  let affLink = shortLink || originalRow.affiliate_link || originalRow.affiliate_url || null;
+  if (!affLink && productUrl) {
+    affLink = productUrl.includes("?")
+      ? `${productUrl}&utm_source=an_shofiliate`
+      : `${productUrl}?utm_source=an_shofiliate`;
+  }
 
   // Ekstraksi rating (dari GraphQL Shopee atau baris import Shopdora)
   const rawRating = node?.ratingStar ?? node?.rating ?? originalRow.rating ?? originalRow.rating_star ?? originalRow.score ?? originalRow.product_rating ?? originalRow.shop_rating ?? null;
@@ -764,7 +768,7 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
 
   // Tentukan affDomain utama
   const firstRegion = preparedItems.find((p) => p.region)?.region || defaultRegion || "ID";
-  const affDomain = REGION_AFFILIATE_DOMAINS[firstRegion] || "affiliate.shopee.co.id";
+  let affDomain = REGION_AFFILIATE_DOMAINS[firstRegion] || "affiliate.shopee.co.id";
 
   let shopeeTab = null;
   let createdTempTab = false;
@@ -775,6 +779,15 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
     shopeeTab = allTabs.find((t) => (t.url || "").includes(`://${affDomain}`));
     if (!shopeeTab) {
       shopeeTab = allTabs.find((t) => (t.url || "").includes("affiliate.shopee."));
+    }
+
+    if (shopeeTab && shopeeTab.url) {
+      try {
+        const tabHost = new URL(shopeeTab.url).hostname;
+        if (tabHost && tabHost.includes("affiliate.shopee.")) {
+          affDomain = tabHost;
+        }
+      } catch (e) {}
     }
 
     // Jika tidak ada tab Shopee yang terbuka sama sekali, buka 1 tab di latar belakang
@@ -838,14 +851,20 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
           try {
             const singleData = await fetchAffiliateDataForProduct(it.url, it.itemId, it.region);
             const merged = mergeItemData(
-              it.row,
+              {
+                ...it.row,
+                ...singleData,
+              },
               it.itemId,
               singleData.affiliate_link,
               null,
               it.url,
               it.region
             );
-            enrichedRows[it.idx] = merged;
+            enrichedRows[it.idx] = {
+              ...merged,
+              ...singleData,
+            };
           } catch (e) {
             enrichedRows[it.idx] = it.row;
           }
@@ -1363,10 +1382,41 @@ async function runAutomateInPage(targetItemId) {
     ? capturedLink
     : "";
 
+  // 7. Ekstraksi Rating Bintang (1.0 - 5.0)
+  let rating = null;
+  try {
+    const candidates = Array.from(document.querySelectorAll("span, div, p, em, b, strong"));
+    for (const el of candidates) {
+      if (isOurElement(el)) continue;
+      if (el.children.length > 2) continue;
+      const t = (el.textContent || "").trim();
+      const m = t.match(/^(?:⭐|★)?\s*([1-5](?:[.,]\d)?)\s*(?:\/\s*5)?$/);
+      if (m) {
+        const val = parseFloat(m[1].replace(",", "."));
+        if (!isNaN(val) && val >= 1.0 && val <= 5.0) {
+          const parentText = (el.parentElement?.textContent || "").toLowerCase();
+          const hasStarOrRating =
+            parentText.includes("rating") ||
+            parentText.includes("penilaian") ||
+            parentText.includes("bintang") ||
+            parentText.includes("star") ||
+            el.parentElement?.querySelector("svg, i, .anticon-star, .shopee-svg-icon");
+          if (hasStarOrRating) {
+            rating = val;
+            break;
+          } else if (!rating && (t.includes("★") || t.includes("⭐") || t.includes("/5"))) {
+            rating = val;
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
   return {
     itemId: pageItemId,
     productName: productName || `Produk Shopee #${pageItemId}`,
     price: price || 0,
+    rating: rating,
     live: liveData,
     social: socialData,
     video: videoData,
@@ -1421,6 +1471,8 @@ function formatProductResult(d, region = "ID") {
     sales_30d: 0,
     gmv_30d: priceStr,
     growth_30d: "0.0%",
+    rating: d.rating ?? null,
+    rating_star: d.rating ?? null,
     commission_rate: liveXtraRate + liveShopeeRate,
     commission_amount: liveEstAmt,
     commission_live_rate: liveXtraRate + liveShopeeRate,

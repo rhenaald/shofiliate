@@ -156,12 +156,33 @@
   // 1. Ekstraksi Data Produk & Tabel Komisi
   function extractProductOfferData() {
     const pathname = window.location.pathname;
+    let itemId = null;
     const urlMatch = pathname.match(/\/offer\/product_offer\/(\d+)/);
-    const itemId = urlMatch ? urlMatch[1] : null;
+    if (urlMatch) {
+      itemId = urlMatch[1];
+    } else {
+      const searchParams = new URLSearchParams(window.location.search);
+      itemId = searchParams.get("itemId") || searchParams.get("item_id") || searchParams.get("id");
+    }
+
+    if (!itemId) {
+      const foundLink = Array.from(document.querySelectorAll("a[href]")).find((a) => {
+        return /\/offer\/product_offer\/(\d+)/.test(a.href) || /\/product\/0\/(\d+)/.test(a.href);
+      });
+      if (foundLink) {
+        const m = foundLink.href.match(/\/offer\/product_offer\/(\d+)/) || foundLink.href.match(/\/product\/0\/(\d+)/);
+        if (m) itemId = m[1];
+      }
+    }
 
     if (!itemId) return null;
 
-    const tld = window.location.hostname.includes(".com.my") ? "com.my" : "co.id";
+    let tld = "co.id";
+    if (window.location.hostname.includes(".com.my")) tld = "com.my";
+    else if (window.location.hostname.includes(".sg")) tld = "sg";
+    else if (window.location.hostname.includes(".co.th")) tld = "co.th";
+    else if (window.location.hostname.includes(".ph")) tld = "ph";
+    else if (window.location.hostname.includes(".vn")) tld = "vn";
     const productUrl = `https://shopee.${tld}/product/0/${itemId}`;
 
     // A. Ambil Judul Produk Asli (Wajib menolak teks Shofiliate / Buat Link / Dapatkan Pautan / Get Link)

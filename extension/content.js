@@ -12,9 +12,26 @@
     }
   }
 
+  // Tandai DOM secara sinkron agar halaman web bisa mendeteksi langsung tanpa delay
+  function markExtensionPresent() {
+    try {
+      if (document.documentElement) {
+        document.documentElement.setAttribute("data-shofiliate-extension-installed", "true");
+        document.documentElement.dataset.shofiliateExtensionInstalled = "true";
+      }
+      window.dispatchEvent(new CustomEvent("shofiliate-extension-ready", { detail: { version: "1.0.0" } }));
+    } catch (e) {}
+  }
+
+  markExtensionPresent();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", markExtensionPresent);
+  }
+
   // Beritahu web page bahwa extension aktif
   function announceExtension() {
     if (!isExtensionValid()) return;
+    markExtensionPresent();
     try {
       window.postMessage(
         {
@@ -30,6 +47,8 @@
   }
 
   announceExtension();
+  setTimeout(announceExtension, 250);
+  setTimeout(announceExtension, 800);
 
   // Dengarkan pesan dari Web Application (React / Next.js)
   window.addEventListener("message", (event) => {
