@@ -227,3 +227,16 @@ model DailyTarget {
 
   @@id([userId, date])
 }
+
+model ImportStagingFile {
+  id            String   @id @default(cuid())
+  userId        String
+  fileName      String
+  rows          Json
+  rowCount      Int      @default(0)
+  enrichedCount Int      @default(0)
+  status        String   @default("staged")
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  @@index([userId, createdAt])
+}
