@@ -237,7 +237,40 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
     });
 
     if (res.ok) {
-      const data = await res.json();
+      let data = await res.json();
+      if (data?.errors && !data?.data?.productOfferV2) {
+        body.query = `query productOfferV2($keyword: String, $page: Int, $limit: Int) {
+          productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
+            nodes {
+              itemId
+              commissionRate
+              minCommission
+              maxCommission
+              price
+              offerLink
+              liveCommissionRate
+              liveCommissionAmount
+              socialCommissionRate
+              socialCommissionAmount
+              videoCommissionRate
+              videoCommissionAmount
+              hasKomisiXtra
+              extraCommissionRate
+              extraCommissionAmount
+            }
+          }
+        }`;
+        const resFallback = await fetch(gqlUrl, {
+          method: "POST",
+          credentials: "include",
+          signal: AbortSignal.timeout(4000),
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (resFallback.ok) {
+          data = await resFallback.json();
+        }
+      }
       const node = data?.data?.productOfferV2?.nodes?.[0];
       if (node) {
         if (node.commissionRate !== undefined && node.commissionRate !== null) {
@@ -459,6 +492,43 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
 
             if (res.ok) {
               const json = await res.json();
+              if (json?.errors && !json?.data?.productOfferV2) {
+                const fallbackBody = {
+                  operationName: "productOfferV2",
+                  query: `query productOfferV2($keyword: String, $page: Int, $limit: Int) {
+                    productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
+                      nodes {
+                        itemId
+                        productName
+                        commissionRate
+                        minCommission
+                        maxCommission
+                        price
+                        offerLink
+                        liveCommissionRate
+                        liveCommissionAmount
+                        socialCommissionRate
+                        socialCommissionAmount
+                        videoCommissionRate
+                        videoCommissionAmount
+                        hasKomisiXtra
+                        extraCommissionRate
+                        extraCommissionAmount
+                      }
+                    }
+                  }`,
+                  variables: { keyword: String(it.itemId), page: 1, limit: 1 },
+                };
+                const fallbackRes = await fetch(gqlUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Accept: "application/json" },
+                  body: JSON.stringify(fallbackBody),
+                });
+                if (fallbackRes.ok) {
+                  const fallbackJson = await fallbackRes.json();
+                  return fallbackJson?.data?.productOfferV2?.nodes?.[0] || null;
+                }
+              }
               return json?.data?.productOfferV2?.nodes?.[0] || null;
             }
           } catch (e) {
