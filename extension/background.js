@@ -343,10 +343,267 @@ async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 6000) {
   return false;
 }
 
-// Eksekusi enrichment untuk semua baris produk secara bertahap via tab Shopee Affiliate di latar belakang
+// Menjalankan batch GraphQL API langsung di dalam konteks tab Shopee Affiliate aktif
+async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: async (items, domain) => {
+        // Cek jika diarahkan ke halaman login
+        if (window.location.pathname.includes("/login") || window.location.href.includes("login")) {
+          return { error: "NOT_LOGGED_IN" };
+        }
+
+        // 1. Batch generate shortlinks via batchGetCustomLink (1 request untuk semua item dalam batch)
+        const shortLinksMap = {};
+        try {
+          const gqlUrl = `https://${domain}/api/v3/gql?q=batchCustomLink`;
+          const body = {
+            operationName: "batchGetCustomLink",
+            query: `query batchGetCustomLink($linkParams: [CustomLinkParam!], $sourceCaller: SourceCaller){
+              batchCustomLink(linkParams: $linkParams, sourceCaller: $sourceCaller){
+                shortLink
+                longLink
+                failCode
+              }
+            }`,
+            variables: {
+              linkParams: items.map((it) => ({
+                originalLink: it.url,
+                advancedLinkParams: { subId1: "shofiliate" },
+              })),
+              sourceCaller: "CUSTOM_LINK_CALLER",
+            },
+          };
+
+          const res = await fetch(gqlUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+
+          if (res.status === 401 || res.status === 403) {
+            return { error: "NOT_LOGGED_IN" };
+          }
+
+          if (res.ok) {
+            const json = await res.json();
+            const list = json?.data?.batchCustomLink || [];
+            list.forEach((entry, idx) => {
+              if (entry && entry.shortLink && items[idx]) {
+                shortLinksMap[items[idx].itemId] = entry.shortLink;
+              }
+            });
+          }
+        } catch (e) {
+          console.warn("[Shofiliate] batchCustomLink in-tab error:", e);
+        }
+
+        // 2. Fetch commission details in parallel for each item in batch via productOfferV2
+        const detailsPromises = items.map(async (it) => {
+          try {
+            const gqlUrl = `https://${domain}/api/v3/gql`;
+            const body = {
+              operationName: "productOfferV2",
+              query: `query productOfferV2($keyword: String, $page: Int, $limit: Int) {
+                productOfferV2(keyword: $keyword, page: $page, limit: $limit) {
+                  nodes {
+                    itemId
+                    productName
+                    commissionRate
+                    minCommission
+                    maxCommission
+                    price
+                    offerLink
+                    liveCommissionRate
+                    liveCommissionAmount
+                    socialCommissionRate
+                    socialCommissionAmount
+                    videoCommissionRate
+                    videoCommissionAmount
+                    hasKomisiXtra
+                    extraCommissionRate
+                    extraCommissionAmount
+                  }
+                }
+              }`,
+              variables: {
+                keyword: String(it.itemId),
+                page: 1,
+                limit: 1,
+              },
+            };
+
+            const res = await fetch(gqlUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify(body),
+            });
+
+            if (res.ok) {
+              const json = await res.json();
+              return json?.data?.productOfferV2?.nodes?.[0] || null;
+            }
+          } catch (e) {
+            // ignore
+          }
+          return null;
+        });
+
+        const detailsList = await Promise.all(detailsPromises);
+
+        return {
+          success: true,
+          items: items.map((it, idx) => {
+            const shortLink = shortLinksMap[it.itemId] || null;
+            const node = detailsList[idx] || null;
+            return {
+              itemId: it.itemId,
+              shortLink: shortLink || node?.offerLink || null,
+              node,
+            };
+          }),
+        };
+      },
+      args: [batchItems, affDomain],
+    });
+
+    return results?.[0]?.result || null;
+  } catch (err) {
+    console.warn("[Shofiliate] executeBatchDirectInTab failed:", err);
+    return null;
+  }
+}
+
+// Helper untuk menggabungkan data node API dengan data asli baris import
+function mergeItemData(originalRow, itemId, shortLink, node, productUrl, region) {
+  const currencySymbols = {
+    MY: "RM",
+    SG: "S$",
+    ID: "Rp",
+    TH: "฿",
+    PH: "₱",
+    VN: "₫",
+  };
+  const sym = currencySymbols[region] || "Rp";
+
+  const price = node?.price ? parseFloat(node.price) : 0;
+  const priceStr = price ? `${sym} ${price.toLocaleString("id-ID")}` : originalRow.gmv_30d || `${sym} 0`;
+
+  const commRate = node?.commissionRate !== undefined && node.commissionRate !== null
+    ? parseFloat(node.commissionRate)
+    : (originalRow.commission_rate ?? null);
+
+  const maxComm = node?.maxCommission !== undefined && node.maxCommission !== null
+    ? parseFloat(node.maxCommission)
+    : (node?.minCommission !== undefined && node.minCommission !== null ? parseFloat(node.minCommission) : (originalRow.commission_amount ?? null));
+
+  // Live
+  const liveXtraRate = node?.extraCommissionRate !== undefined && node.extraCommissionRate !== null
+    ? parseFloat(node.extraCommissionRate)
+    : (originalRow.commission_live_xtra_rate ?? 0);
+
+  const liveXtraAmt = node?.extraCommissionAmount !== undefined && node.extraCommissionAmount !== null
+    ? parseFloat(node.extraCommissionAmount)
+    : (originalRow.commission_live_xtra_amount ?? 0);
+
+  const liveShopeeRate = node?.liveCommissionRate !== undefined && node.liveCommissionRate !== null
+    ? parseFloat(node.liveCommissionRate)
+    : (node?.commissionRate !== undefined ? parseFloat(node.commissionRate) : (originalRow.commission_live_shopee_rate ?? 0));
+
+  const liveShopeeAmt = node?.liveCommissionAmount !== undefined && node.liveCommissionAmount !== null
+    ? parseFloat(node.liveCommissionAmount)
+    : (originalRow.commission_live_shopee_amount ?? 0);
+
+  const liveEstAmt = (liveXtraAmt + liveShopeeAmt) || (originalRow.commission_live_amount ?? maxComm);
+
+  // Social
+  const socialXtraRate = liveXtraRate;
+  const socialXtraAmt = liveXtraAmt;
+  const socialShopeeRate = node?.socialCommissionRate !== undefined && node.socialCommissionRate !== null
+    ? parseFloat(node.socialCommissionRate)
+    : (node?.commissionRate !== undefined ? parseFloat(node.commissionRate) : (originalRow.commission_social_shopee_rate ?? 0));
+  const socialShopeeAmt = node?.socialCommissionAmount !== undefined && node.socialCommissionAmount !== null
+    ? parseFloat(node.socialCommissionAmount)
+    : (originalRow.commission_social_shopee_amount ?? 0);
+  const socialEstAmt = (socialXtraAmt + socialShopeeAmt) || (originalRow.commission_social_amount ?? maxComm);
+
+  // Video
+  const videoXtraRate = liveXtraRate;
+  const videoXtraAmt = liveXtraAmt;
+  const videoShopeeRate = node?.videoCommissionRate !== undefined && node.videoCommissionRate !== null
+    ? parseFloat(node.videoCommissionRate)
+    : (node?.commissionRate !== undefined ? parseFloat(node.commissionRate) : (originalRow.commission_video_shopee_rate ?? 0));
+  const videoShopeeAmt = node?.videoCommissionAmount !== undefined && node.videoCommissionAmount !== null
+    ? parseFloat(node.videoCommissionAmount)
+    : (originalRow.commission_video_shopee_amount ?? 0);
+  const videoEstAmt = (videoXtraAmt + videoShopeeAmt) || (originalRow.commission_video_amount ?? maxComm);
+
+  const hasKomisiXtra = Boolean(
+    liveXtraRate > 0 ||
+    node?.hasKomisiXtra ||
+    originalRow.has_komisi_xtra
+  );
+
+  const affLink = shortLink || originalRow.affiliate_link || originalRow.affiliate_url || null;
+
+  return {
+    ...originalRow,
+    product_id: itemId,
+    product_name: originalRow.product_name || node?.productName || (itemId ? `Produk Shopee #${itemId}` : "Produk Shopee"),
+    seller_name: originalRow.seller_name || "Shopee Verified Seller",
+    product_url: originalRow.product_url || productUrl,
+    total_sales: originalRow.total_sales ?? 0,
+    sales_30d: originalRow.sales_30d ?? 0,
+    gmv_30d: originalRow.gmv_30d && originalRow.gmv_30d !== "-" ? originalRow.gmv_30d : priceStr,
+    growth_30d: originalRow.growth_30d ?? "0.0%",
+
+    commission_rate: (liveXtraRate + liveShopeeRate) || commRate || originalRow.commission_rate,
+    commission_amount: liveEstAmt || originalRow.commission_amount,
+
+    commission_live_rate: (liveXtraRate + liveShopeeRate) || originalRow.commission_live_rate,
+    commission_live_amount: liveEstAmt || originalRow.commission_live_amount,
+
+    commission_social_rate: (socialXtraRate + socialShopeeRate) || originalRow.commission_social_rate,
+    commission_social_amount: socialEstAmt || originalRow.commission_social_amount,
+
+    commission_video_rate: (videoXtraRate + videoShopeeRate) || originalRow.commission_video_rate,
+    commission_video_amount: videoEstAmt || originalRow.commission_video_amount,
+
+    has_komisi_xtra: hasKomisiXtra,
+    komisi_xtra_rate: liveXtraRate || originalRow.komisi_xtra_rate,
+    komisi_xtra_amount: liveXtraAmt || originalRow.komisi_xtra_amount,
+
+    commission_live_xtra_rate: liveXtraRate,
+    commission_live_xtra_amount: liveXtraAmt,
+    commission_live_shopee_rate: liveShopeeRate,
+    commission_live_shopee_amount: liveShopeeAmt,
+
+    commission_social_xtra_rate: socialXtraRate,
+    commission_social_xtra_amount: socialXtraAmt,
+    commission_social_shopee_rate: socialShopeeRate,
+    commission_social_shopee_amount: socialShopeeAmt,
+
+    commission_video_xtra_rate: videoXtraRate,
+    commission_video_xtra_amount: videoXtraAmt,
+    commission_video_shopee_rate: videoShopeeRate,
+    commission_video_shopee_amount: videoShopeeAmt,
+
+    affiliate_link: affLink,
+    affiliate_url: affLink,
+  };
+}
+
+// Eksekusi enrichment untuk semua baris produk via Direct GraphQL API Batch di tab Shopee Affiliate aktif
 async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
   const total = rows.length;
-  const enrichedRows = [];
+  const enrichedRows = new Array(total);
 
   const sendProgress = (completed, currentName = "") => {
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 100;
@@ -364,7 +621,6 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
       chrome.tabs.sendMessage(tabId, progressData).catch(() => {});
     }
 
-    // Fallback broadcast ke tab Shofiliate lainnya
     try {
       chrome.tabs.query({ url: ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"] }, (tabs) => {
         for (const t of tabs || []) {
@@ -373,171 +629,160 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
           }
         }
       });
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   };
 
-  sendProgress(0, "Mempersiapkan proses enrichment produk...");
+  sendProgress(0, "Menghubungkan ke Shopee Affiliate...");
 
-  let backgroundTab = null;
+  // 1. Ekstrak data dan deteksi region dominan
+  const preparedItems = rows.map((row, idx) => {
+    let itemId = String(row.product_id || row.itemId || row.item_id || "").trim();
+    const rawUrl = String(row.product_url || row.url || "").trim();
+
+    if (!itemId && rawUrl) {
+      const m1 = rawUrl.match(/\/product\/(\d+)\/(\d+)/);
+      const m2 = rawUrl.match(/-i\.(\d+)\.(\d+)/);
+      const m3 = rawUrl.match(/\/offer\/product_offer\/(\d+)/);
+      if (m1) itemId = m1[2];
+      else if (m2) itemId = m2[2];
+      else if (m3) itemId = m3[1];
+    }
+
+    let rowRegion = defaultRegion || "ID";
+    if (rawUrl.includes(".com.my")) rowRegion = "MY";
+    else if (rawUrl.includes(".co.id")) rowRegion = "ID";
+    else if (rawUrl.includes(".sg")) rowRegion = "SG";
+    else if (rawUrl.includes(".ph")) rowRegion = "PH";
+    else if (rawUrl.includes(".co.th")) rowRegion = "TH";
+    else if (rawUrl.includes(".vn")) rowRegion = "VN";
+
+    const mainDomain = REGION_MAIN_DOMAINS[rowRegion] || "shopee.co.id";
+    const productUrl = rawUrl || (itemId ? `https://${mainDomain}/product/0/${itemId}` : "");
+
+    return {
+      idx,
+      row,
+      itemId,
+      url: productUrl,
+      region: rowRegion,
+    };
+  });
+
+  // Tentukan affDomain utama
+  const firstRegion = preparedItems.find((p) => p.region)?.region || defaultRegion || "ID";
+  const affDomain = REGION_AFFILIATE_DOMAINS[firstRegion] || "affiliate.shopee.co.id";
+
+  let shopeeTab = null;
+  let createdTempTab = false;
 
   try {
-    // Buka 1 background tab (active: false) untuk mengeksekusi semua produk secara berurutan tanpa mengganggu layar pengguna
-    backgroundTab = await chrome.tabs.create({
-      url: "about:blank",
-      active: false,
+    // 2. Cari tab Shopee Affiliate yang sudah terbuka di browser
+    const allTabs = await chrome.tabs.query({});
+    shopeeTab = allTabs.find((t) => (t.url || "").includes(`://${affDomain}`));
+    if (!shopeeTab) {
+      shopeeTab = allTabs.find((t) => (t.url || "").includes("affiliate.shopee."));
+    }
+
+    // Jika tidak ada tab Shopee yang terbuka sama sekali, buka 1 tab di latar belakang
+    if (!shopeeTab) {
+      shopeeTab = await chrome.tabs.create({
+        url: `https://${affDomain}/`,
+        active: false,
+      });
+      createdTempTab = true;
+      // Beri jeda 1.2 detik sekali saja agar tab selesai inisialisasi session
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+
+    // 3. Pisahkan item valid vs invalid
+    const validItems = preparedItems.filter((it) => it.itemId && /^\d+$/.test(it.itemId));
+    const invalidItems = preparedItems.filter((it) => !it.itemId || !/^\d+$/.test(it.itemId));
+
+    // Masukkan invalid items langsung ke enrichedRows
+    invalidItems.forEach((it) => {
+      enrichedRows[it.idx] = it.row;
     });
 
-    for (let i = 0; i < total; i++) {
-      const row = rows[i];
+    // 4. Proses valid items dalam batch (CHUNK_SIZE = 5 untuk kecepatan maksimal & aman dari rate limit)
+    const CHUNK_SIZE = 5;
+    let processedCount = invalidItems.length;
 
-      // 1. Ekstrak Item ID dari product_id, itemId, atau URL
-      let itemId = String(row.product_id || row.itemId || row.item_id || "").trim();
-      const rawUrl = String(row.product_url || row.url || "").trim();
+    for (let c = 0; c < validItems.length; c += CHUNK_SIZE) {
+      const chunk = validItems.slice(c, c + CHUNK_SIZE);
+      sendProgress(processedCount, `Memproses API: ${chunk[0].row.product_name || chunk[0].itemId}...`);
 
-      if (!itemId && rawUrl) {
-        const m1 = rawUrl.match(/\/product\/(\d+)\/(\d+)/);
-        const m2 = rawUrl.match(/-i\.(\d+)\.(\d+)/);
-        const m3 = rawUrl.match(/\/offer\/product_offer\/(\d+)/);
-        if (m1) itemId = m1[2];
-        else if (m2) itemId = m2[2];
-        else if (m3) itemId = m3[1];
+      // Panggil GraphQL internal API langsung di dalam tab aktif
+      const batchResult = await executeBatchDirectInTab(shopeeTab.id, affDomain, chunk);
+
+      if (batchResult?.error === "NOT_LOGGED_IN") {
+        throw new Error(`Akun Shopee Affiliate Anda belum login di portal ${affDomain}. Silakan login terlebih dahulu di tab browser Chrome.`);
       }
 
-      // Deteksi region: periksa dari URL jika ada domain Shopee negara tertentu, jika tidak gunakan defaultRegion
-      let rowRegion = defaultRegion || "ID";
-      if (rawUrl.includes(".com.my")) rowRegion = "MY";
-      else if (rawUrl.includes(".co.id")) rowRegion = "ID";
-      else if (rawUrl.includes(".sg")) rowRegion = "SG";
-      else if (rawUrl.includes(".ph")) rowRegion = "PH";
-      else if (rawUrl.includes(".co.th")) rowRegion = "TH";
-      else if (rawUrl.includes(".vn")) rowRegion = "VN";
-
-      const affDomain = REGION_AFFILIATE_DOMAINS[rowRegion] || "affiliate.shopee.co.id";
-
-      // Jika tidak ada numeric ID, simpan baris apa adanya dan lanjut
-      if (!itemId || !/^\d+$/.test(itemId)) {
-        enrichedRows.push(row);
-        sendProgress(i + 1, row.product_name || `Baris #${i + 1}`);
-        continue;
-      }
-
-      sendProgress(i, `Mengambil data komisi & link ID: ${itemId}...`);
-
-      const targetOfferUrl = `https://${affDomain}/offer/product_offer/${itemId}`;
-
-      try {
-        // Pastikan background tab masih aktif
-        try {
-          await chrome.tabs.get(backgroundTab.id);
-        } catch (e) {
-          backgroundTab = await chrome.tabs.create({ url: "about:blank", active: false });
-        }
-
-        // Navigasi ke rincian penawaran produk
-        await chrome.tabs.update(backgroundTab.id, { url: targetOfferUrl });
-        await waitForTabToLoadItem(backgroundTab.id, itemId, 5000);
-        await new Promise((r) => setTimeout(r, 600));
-
-        // Eksekusi script in-page automation (mengambil judul, komisi Live/Sosmed/Video/Xtra, dan klik buat shortlink)
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: backgroundTab.id },
-          func: runAutomateInPage,
-          args: [itemId],
+      if (batchResult?.success && Array.isArray(batchResult.items)) {
+        const resultMap = {};
+        batchResult.items.forEach((res) => {
+          resultMap[res.itemId] = res;
         });
 
-        const data = results?.[0]?.result;
-        if (data?.error === "NOT_LOGGED_IN") {
-          throw new Error(data.message);
+        chunk.forEach((it) => {
+          const res = resultMap[it.itemId];
+          const merged = mergeItemData(
+            it.row,
+            it.itemId,
+            res?.shortLink,
+            res?.node,
+            it.url,
+            it.region
+          );
+          enrichedRows[it.idx] = merged;
+          processedCount++;
+        });
+      } else {
+        // Fallback jika direct API gagal (misal tab tertutup):
+        // Coba per item via fetchAffiliateDataForProduct
+        for (const it of chunk) {
+          try {
+            const singleData = await fetchAffiliateDataForProduct(it.url, it.itemId, it.region);
+            const merged = mergeItemData(
+              it.row,
+              it.itemId,
+              singleData.affiliate_link,
+              null,
+              it.url,
+              it.region
+            );
+            enrichedRows[it.idx] = merged;
+          } catch (e) {
+            enrichedRows[it.idx] = it.row;
+          }
+          processedCount++;
         }
-
-        if (data && (data.productName || data.itemId)) {
-          const formatted = formatProductResult(data, rowRegion);
-
-          // Gabungkan hasil scraping dengan baris asli (melengkapi data yang kosong)
-          const mergedRow = {
-            ...row,
-            product_id: itemId,
-            product_name:
-              row.product_name && row.product_name.trim() !== ""
-                ? row.product_name
-                : formatted.product_name,
-            seller_name:
-              row.seller_name && row.seller_name.trim() !== ""
-                ? row.seller_name
-                : formatted.seller_name,
-            product_url:
-              row.product_url && row.product_url.trim() !== ""
-                ? row.product_url
-                : formatted.product_url,
-            gmv_30d:
-              row.gmv_30d && row.gmv_30d.trim() !== "" && row.gmv_30d !== "-"
-                ? row.gmv_30d
-                : formatted.gmv_30d,
-
-            commission_rate: formatted.commission_rate,
-            commission_amount: formatted.commission_amount,
-            commission_live_rate: formatted.commission_live_rate,
-            commission_live_amount: formatted.commission_live_amount,
-            commission_social_rate: formatted.commission_social_rate,
-            commission_social_amount: formatted.commission_social_amount,
-            commission_video_rate: formatted.commission_video_rate,
-            commission_video_amount: formatted.commission_video_amount,
-            has_komisi_xtra: formatted.has_komisi_xtra,
-            komisi_xtra_rate: formatted.komisi_xtra_rate,
-            komisi_xtra_amount: formatted.komisi_xtra_amount,
-
-            commission_live_xtra_rate: formatted.commission_live_xtra_rate,
-            commission_live_xtra_amount: formatted.commission_live_xtra_amount,
-            commission_live_shopee_rate: formatted.commission_live_shopee_rate,
-            commission_live_shopee_amount: formatted.commission_live_shopee_amount,
-
-            commission_social_xtra_rate: formatted.commission_social_xtra_rate,
-            commission_social_xtra_amount: formatted.commission_social_xtra_amount,
-            commission_social_shopee_rate: formatted.commission_social_shopee_rate,
-            commission_social_shopee_amount: formatted.commission_social_shopee_amount,
-
-            commission_video_xtra_rate: formatted.commission_video_xtra_rate,
-            commission_video_xtra_amount: formatted.commission_video_xtra_amount,
-            commission_video_shopee_rate: formatted.commission_video_shopee_rate,
-            commission_video_shopee_amount: formatted.commission_video_shopee_amount,
-
-            affiliate_link: formatted.affiliate_link || row.affiliate_link || null,
-            affiliate_url: formatted.affiliate_link || row.affiliate_url || null,
-          };
-
-          enrichedRows.push(mergedRow);
-          sendProgress(i + 1, mergedRow.product_name || itemId);
-        } else {
-          enrichedRows.push(row);
-          sendProgress(i + 1, row.product_name || itemId);
-        }
-      } catch (err) {
-        if (err.message && err.message.includes("belum login")) {
-          throw err;
-        }
-        console.warn(`[Shofiliate] Gagal mengambil rincian untuk ID ${itemId}:`, err);
-        enrichedRows.push(row);
-        sendProgress(i + 1, row.product_name || itemId);
       }
 
-      // Jeda kecil antar item agar tidak membebani browser
-      if (i < total - 1) {
-        await new Promise((r) => setTimeout(r, 350));
+      sendProgress(processedCount, chunk[chunk.length - 1].row.product_name || "");
+
+      // Jeda kecil 200ms antar batch (sangat aman untuk anti-spam Shopee)
+      if (c + CHUNK_SIZE < validItems.length) {
+        await new Promise((r) => setTimeout(r, 200));
       }
     }
   } finally {
-    // Selalu tutup background tab yang dibuat otomatis
-    if (backgroundTab?.id) {
+    // Tutup tab sementara jika kita yang membuatnya
+    if (createdTempTab && shopeeTab?.id) {
       try {
-        await chrome.tabs.remove(backgroundTab.id);
+        await chrome.tabs.remove(shopeeTab.id);
       } catch (e) {}
     }
   }
 
+  // Pastikan urutan baris sesuai dengan urutan file asli
+  const finalResult = [];
+  for (let i = 0; i < total; i++) {
+    finalResult.push(enrichedRows[i] || rows[i]);
+  }
+
   sendProgress(total, "Selesai melengkapi semua produk!");
-  return enrichedRows;
+  return finalResult;
 }
 
 // In-page function dieksekusi langsung di tab Shopee Affiliate via chrome.scripting.executeScript
