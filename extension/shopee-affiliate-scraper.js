@@ -236,7 +236,37 @@
       }
     }
 
-    // C. Ekstraksi Tabel Rincian Komisi (Mendukung 3 Kolom atau 4 Kolom)
+    // C. Ekstraksi Rating Bintang (1.0 - 5.0)
+    let rating = null;
+    try {
+      const candidates = Array.from(document.querySelectorAll("span, div, p, em, b, strong"));
+      for (const el of candidates) {
+        if (isOurElement(el)) continue;
+        if (el.children.length > 2) continue;
+        const t = (el.textContent || "").trim();
+        const m = t.match(/^(?:⭐|★)?\s*([1-5](?:[.,]\d)?)\s*(?:\/\s*5)?$/);
+        if (m) {
+          const val = parseFloat(m[1].replace(",", "."));
+          if (!isNaN(val) && val >= 1.0 && val <= 5.0) {
+            const parentText = (el.parentElement?.textContent || "").toLowerCase();
+            const hasStarOrRating =
+              parentText.includes("rating") ||
+              parentText.includes("penilaian") ||
+              parentText.includes("bintang") ||
+              parentText.includes("star") ||
+              el.parentElement?.querySelector("svg, i, .anticon-star, .shopee-svg-icon");
+            if (hasStarOrRating) {
+              rating = val;
+              break;
+            } else if (!rating && (t.includes("★") || t.includes("⭐") || t.includes("/5"))) {
+              rating = val;
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
+    // D. Ekstraksi Tabel Rincian Komisi (Mendukung 3 Kolom atau 4 Kolom)
     let allRows = Array.from(document.querySelectorAll("tr, [role='row']")).filter((r) => !isOurElement(r));
     if (allRows.length === 0) {
       allRows = Array.from(document.querySelectorAll("div")).filter((d) => {
@@ -377,6 +407,7 @@
       productName: productName || `Produk Shopee #${itemId}`,
       productUrl,
       price,
+      rating,
       hasShopeeColumn: shopeeColIdx !== -1,
       live: liveData,
       social: socialData,

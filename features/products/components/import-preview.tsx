@@ -8,6 +8,7 @@ import {
   FileSpreadsheetIcon,
   Loader2Icon,
   SparklesIcon,
+  StarIcon,
 } from "lucide-react";
 import * as React from "react";
 
@@ -268,6 +269,7 @@ export function ImportPreview({
                 <TableHead className="w-12 text-xs">#</TableHead>
                 <TableHead className="text-xs">Product ID</TableHead>
                 <TableHead className="text-xs min-w-[200px]">Nama Produk</TableHead>
+                <TableHead className="text-xs">Rating</TableHead>
                 <TableHead className="text-xs min-w-[170px]">Rincian Komisi</TableHead>
                 <TableHead className="text-xs min-w-[140px]">Est. Komisi</TableHead>
                 <TableHead className="text-xs min-w-[140px]">Link Affiliate</TableHead>
@@ -284,6 +286,7 @@ export function ImportPreview({
                 const rate = row.commission_live_rate || row.commission_rate;
                 const amount = row.commission_live_amount || row.commission_amount;
                 const hasXtra = Boolean(row.has_komisi_xtra || row.komisi_xtra_rate);
+                const rawRating = row.rating ?? row.rating_star ?? row.score ?? row.product_rating ?? row.shop_rating;
 
                 return (
                   <TableRow key={idx} className="text-xs">
@@ -308,6 +311,22 @@ export function ImportPreview({
                         <span className="line-clamp-2" title={String(row.product_name ?? "")}>
                           {String(row.product_name ?? "-")}
                         </span>
+                      )}
+                    </TableCell>
+
+                    {/* Rating */}
+                    <TableCell className="font-mono whitespace-nowrap">
+                      {rawRating !== null && rawRating !== undefined && rawRating !== "" && rawRating !== "-" ? (
+                        <div className="flex items-center gap-1 font-medium text-amber-500">
+                          <StarIcon className="size-3.5 fill-amber-400 text-amber-400" />
+                          <span>
+                            {typeof rawRating === "number"
+                              ? rawRating.toFixed(1)
+                              : String(rawRating).replace(",", ".")}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
 

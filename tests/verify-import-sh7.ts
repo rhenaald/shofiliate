@@ -7,12 +7,13 @@ import {
   parseFloatGrowth,
   parseImportRow,
   parseIntegerSafe,
+  parseRatingSafe,
 } from "../features/products/schemas";
 import type { RawImportRow } from "../features/products/types";
 import { prisma } from "../lib/prisma";
 
 async function runTests() {
-  console.log("=== 1. Testing parseIntegerSafe & parseFloatGrowth ===");
+  console.log("=== 1. Testing parseIntegerSafe, parseFloatGrowth & parseRatingSafe ===");
   assert.equal(parseIntegerSafe("-"), 0);
   assert.equal(parseIntegerSafe(null), 0);
   assert.equal(parseIntegerSafe(undefined), 0);
@@ -23,7 +24,16 @@ async function runTests() {
   assert.equal(parseFloatGrowth("-43.75%"), -43.75);
   assert.equal(parseFloatGrowth("-"), 0);
   assert.equal(parseFloatGrowth(null), 0);
-  console.log("✓ Integer & Growth parsing OK");
+
+  assert.equal(parseRatingSafe("4.8"), 4.8);
+  assert.equal(parseRatingSafe("4,9"), 4.9);
+  assert.equal(parseRatingSafe("⭐ 4.7"), 4.7);
+  assert.equal(parseRatingSafe(4.8), 4.8);
+  assert.equal(parseRatingSafe(48), 4.8);
+  assert.equal(parseRatingSafe("-"), null);
+  assert.equal(parseRatingSafe(null), null);
+  assert.equal(parseRatingSafe(undefined), null);
+  console.log("✓ Integer, Growth & Rating parsing OK");
 
   console.log("\n=== 2. Testing Currency & Amount parsing ===");
   const gmvMY = parseCurrencyAndAmount("RM23898.84", "MY");
@@ -55,6 +65,7 @@ async function runTests() {
     total_sales: "30000",
     total_gmv: "RM23898.84",
     product_url: "https://shopee.com.my/product/133117728/12991894555",
+    rating: "4.8",
   };
 
   const parsed1 = parseImportRow(cosrx1, 1);
@@ -69,6 +80,7 @@ async function runTests() {
     assert.equal(parsed1.data.growth30d, 1.89);
     assert.equal(parsed1.data.gmv30d, 23898.84);
     assert.equal(parsed1.data.historicalSold, 30000);
+    assert.equal(parsed1.data.rating, 4.8);
   }
 
   const cosrx2: RawImportRow = {

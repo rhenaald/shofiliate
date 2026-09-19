@@ -12,6 +12,7 @@ export const catalogRegionSchema = z
 // Kolom yang boleh di-sort dari URL (allowlist — di luar ini ditolak).
 export const catalogSortIds = [
   "name",
+  "rating",
   "likes",
   "sales30d",
   "growth30d",

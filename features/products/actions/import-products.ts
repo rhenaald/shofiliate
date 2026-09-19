@@ -112,6 +112,7 @@ export async function importProducts(params: {
             listedOn: row.listedOn,
             needsRegion: row.needsRegion,
             affiliateUrl: row.affiliateUrl,
+            rating: row.rating,
             commissionRate: row.commissionRate,
             commissionAmount: row.commissionAmount,
             commissionLiveRate: row.commissionLiveRate,
@@ -167,6 +168,7 @@ export async function importProducts(params: {
               category: row.category,
               listedOn: row.listedOn,
               needsRegion: row.needsRegion,
+              ...(row.rating !== null ? { rating: row.rating } : {}),
               ...(row.affiliateUrl ? { affiliateUrl: row.affiliateUrl } : {}),
               ...(row.commissionRate !== null ? { commissionRate: row.commissionRate } : {}),
               ...(row.commissionAmount !== null ? { commissionAmount: row.commissionAmount } : {}),
@@ -198,6 +200,7 @@ export async function importProducts(params: {
     historicalSold: number;
     totalGmv: number;
     likedCount: number;
+    rating: number | null;
     commissionRate: number | null;
     commissionAmount: number | null;
     commissionLiveRate: number | null;
@@ -225,6 +228,7 @@ export async function importProducts(params: {
         historicalSold: row.historicalSold,
         totalGmv: row.totalGmv,
         likedCount: row.likes,
+        rating: row.rating,
         commissionRate: row.commissionRate,
         commissionAmount: row.commissionAmount,
         commissionLiveRate: row.commissionLiveRate,
@@ -252,6 +256,7 @@ export async function importProducts(params: {
       historicalSold: row.historicalSold,
       totalGmv: row.totalGmv,
       likedCount: row.likes,
+      rating: row.rating,
       commissionRate: row.commissionRate,
       commissionAmount: row.commissionAmount,
       commissionLiveRate: row.commissionLiveRate,

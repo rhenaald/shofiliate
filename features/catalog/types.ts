@@ -17,6 +17,7 @@ export const VIEW_DEFAULT_SORT: Record<
 /** Arah default saat kolom pertama kali diklik. */
 export const SORT_DEFAULT_DIR: Record<CatalogSortId, "asc" | "desc"> = {
   name: "asc",
+  rating: "desc",
   likes: "desc",
   sales30d: "desc",
   growth30d: "desc",
@@ -28,6 +29,7 @@ export const SORT_DEFAULT_DIR: Record<CatalogSortId, "asc" | "desc"> = {
 /** Petakan id kolom UI → id sort server (kolom region/category/actions tak sortable). */
 export const COLUMN_SORT_ID: Record<string, CatalogSortId> = {
   productName: "name",
+  rating: "rating",
   likes: "likes",
   sales30d: "sales30d",
   growth30d: "growth30d",
@@ -50,6 +52,7 @@ export interface CatalogProductDTO {
   shopName: string;
   category: string;
   listedOn: string | null;
+  rating: number | null;
   sales1d: number;
   sales7d: number;
   sales30d: number;
@@ -94,6 +97,7 @@ export interface CatalogRow {
   category: string;
   region: CatalogRegion;
   listedOn: string | null;
+  rating: number | null;
   likes: number;
   sales30d: number;
   growth30d: number;
@@ -118,6 +122,7 @@ export function dtoToCatalogRow(dto: CatalogProductDTO): CatalogRow {
     category: dto.category === "" ? "-" : dto.category,
     region: dto.region,
     listedOn: dto.listedOn ? dto.listedOn.slice(0, 10) : null,
+    rating: dto.rating ?? null,
     likes: dto.likedCount,
     sales30d: dto.sales30d,
     growth30d: dto.growth30d,
