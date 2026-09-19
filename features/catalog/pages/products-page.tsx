@@ -15,9 +15,14 @@ interface ProductsPageProps {
   params: CatalogParams;
   result: ListProductsResult;
   progress?: { count: number; target: number };
+  pinnedProductIds: string[];
 }
 
-export function ProductsPage({ params, result }: ProductsPageProps) {
+export function ProductsPage({
+  params,
+  result,
+  pinnedProductIds,
+}: ProductsPageProps) {
   return (
     <div className="space-y-4 p-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -51,6 +56,7 @@ export function ProductsPage({ params, result }: ProductsPageProps) {
           page={result.page}
           pageSize={result.pageSize}
           view={params.view}
+          pinnedProductIds={pinnedProductIds}
         />
       </Suspense>
     </div>

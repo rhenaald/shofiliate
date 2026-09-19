@@ -1,6 +1,7 @@
 import { ProductsPage } from "@/features/catalog/pages/products-page";
 import { getTodayProgress } from "@/features/catalog/data/get-today-progress";
 import { listProducts } from "@/features/catalog/data/list-products";
+import { getPinnedProductIds } from "@/features/pins/data/get-pinned-product-ids";
 import { catalogParamsSchema } from "@/features/catalog/schemas";
 
 interface CatalogRouteProps {
@@ -20,9 +21,10 @@ export default async function CatalogRoute({ searchParams }: CatalogRouteProps) 
     sort: Array.isArray(sp.sort) ? sp.sort[0] : sp.sort,
     dir: Array.isArray(sp.dir) ? sp.dir[0] : sp.dir,
   });
-  const [result, progress] = await Promise.all([
+  const [result, progress, pinnedProductIds] = await Promise.all([
     listProducts(params),
     getTodayProgress(),
+    getPinnedProductIds(),
   ]);
-  return <ProductsPage params={params} result={result} progress={progress} />;
+  return <ProductsPage params={params} result={result} progress={progress} pinnedProductIds={pinnedProductIds} />;
 }
