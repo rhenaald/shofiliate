@@ -60,7 +60,30 @@ export function ImportUploader({
         if (!Array.isArray(rawJson)) {
           throw new Error("File JSON harus berupa array of objects (daftar produk).");
         }
-        parsedRows = rawJson as RawImportRow[];
+        parsedRows = (rawJson as Record<string, unknown>[]).map((item) => {
+          const rowObj: RawImportRow = {};
+          for (const [k, v] of Object.entries(item)) {
+            rowObj[k] = v as string;
+            const norm = normalizeHeader(k);
+            if (norm) {
+              rowObj[norm] = v as string;
+            }
+          }
+          if (!rowObj.product_id && rowObj.product_url) {
+            const u = String(rowObj.product_url);
+            const m1 = u.match(/\/product\/(\d+)\/(\d+)/);
+            const m2 = u.match(/(?:[.\-_]i|i)\.(\d+)\.(\d+)/i);
+            const m3 = u.match(/\/offer\/product_offer\/(\d+)/i);
+            const m4 = u.match(/[?&](?:item_?id|itemid|id)=(\d+)/i);
+            const m5 = u.match(/(\d{8,14})(?:[/?#]|$)/);
+            if (m1) rowObj.product_id = m1[2];
+            else if (m2) rowObj.product_id = m2[2];
+            else if (m3) rowObj.product_id = m3[1];
+            else if (m4) rowObj.product_id = m4[1];
+            else if (m5) rowObj.product_id = m5[1];
+          }
+          return rowObj;
+        });
       } else if (extension === "csv") {
         parsedRows = parseCsvSimple(text);
       }
@@ -320,6 +343,147 @@ export function ImportUploader({
   );
 }
 
+function normalizeHeader(raw: string): string {
+  const clean = raw.trim().toLowerCase().replace(/[\s\-_.]+/g, "_");
+
+  // product_id
+  if (
+    clean === "product_id" ||
+    clean === "productid" ||
+    clean === "item_id" ||
+    clean === "itemid" ||
+    clean === "id" ||
+    clean === "id_produk" ||
+    clean === "kode_produk" ||
+    clean === "goods_id"
+  ) {
+    return "product_id";
+  }
+
+  // product_name
+  if (
+    clean === "product_name" ||
+    clean === "productname" ||
+    clean === "name" ||
+    clean === "title" ||
+    clean === "nama_produk" ||
+    clean === "judul_produk" ||
+    clean === "nama_barang" ||
+    clean === "item_name"
+  ) {
+    return "product_name";
+  }
+
+  // product_url
+  if (
+    clean === "product_url" ||
+    clean === "producturl" ||
+    clean === "url" ||
+    clean === "link" ||
+    clean === "link_produk" ||
+    clean === "product_link" ||
+    clean === "item_url" ||
+    clean === "tautan_produk" ||
+    clean === "tautan" ||
+    clean === "shopee_link" ||
+    clean === "shopee_url"
+  ) {
+    return "product_url";
+  }
+
+  // seller_name
+  if (
+    clean === "seller_name" ||
+    clean === "seller" ||
+    clean === "shop_name" ||
+    clean === "shopname" ||
+    clean === "nama_toko" ||
+    clean === "toko" ||
+    clean === "penjual"
+  ) {
+    return "seller_name";
+  }
+
+  // rating
+  if (
+    clean === "rating" ||
+    clean === "rating_star" ||
+    clean === "score" ||
+    clean === "penilaian" ||
+    clean === "bintang" ||
+    clean === "product_rating" ||
+    clean === "shop_rating"
+  ) {
+    return "rating";
+  }
+
+  // sales_30d
+  if (
+    clean === "sales_30d" ||
+    clean === "30d_sales" ||
+    clean === "sales30d" ||
+    clean === "penjualan_30d" ||
+    clean === "penjualan_30_hari" ||
+    clean === "monthly_sales"
+  ) {
+    return "sales_30d";
+  }
+
+  // gmv_30d
+  if (
+    clean === "gmv_30d" ||
+    clean === "30d_gmv" ||
+    clean === "gmv30d" ||
+    clean === "gmv_30_hari" ||
+    clean === "omset_30d" ||
+    clean === "revenue_30d" ||
+    clean === "price" ||
+    clean === "harga"
+  ) {
+    return "gmv_30d";
+  }
+
+  // growth_30d
+  if (
+    clean === "growth_30d" ||
+    clean === "30d_growth" ||
+    clean === "growth" ||
+    clean === "pertumbuhan"
+  ) {
+    return "growth_30d";
+  }
+
+  // total_sales
+  if (
+    clean === "total_sales" ||
+    clean === "historical_sold" ||
+    clean === "total_sold" ||
+    clean === "terjual" ||
+    clean === "total_terjual"
+  ) {
+    return "total_sales";
+  }
+
+  // affiliate_link
+  if (
+    clean === "affiliate_link" ||
+    clean === "affiliate_url" ||
+    clean === "link_affiliate" ||
+    clean === "pautan_afiliasi" ||
+    clean === "offer_link" ||
+    clean === "custom_link"
+  ) {
+    return "affiliate_link";
+  }
+
+  // commission
+  if (clean === "commission_rate" || clean === "komisi" || clean === "commission") {
+    return "commission_rate";
+  }
+
+  return clean;
+}
+
 function parseCsvSimple(text: string): RawImportRow[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
@@ -348,8 +512,28 @@ function parseCsvSimple(text: string): RawImportRow[] {
 
     const rowObj: RawImportRow = {};
     headers.forEach((header, idx) => {
-      rowObj[header] = values[idx] ?? null;
+      const val = values[idx] ?? null;
+      rowObj[header] = val;
+      const norm = normalizeHeader(header);
+      if (norm) {
+        rowObj[norm] = val;
+      }
     });
+
+    // Otomatis ekstrak product_id dari product_url jika product_id belum ada
+    if (!rowObj.product_id && rowObj.product_url) {
+      const u = String(rowObj.product_url);
+      const m1 = u.match(/\/product\/(\d+)\/(\d+)/);
+      const m2 = u.match(/(?:[.\-_]i|i)\.(\d+)\.(\d+)/i);
+      const m3 = u.match(/\/offer\/product_offer\/(\d+)/i);
+      const m4 = u.match(/[?&](?:item_?id|itemid|id)=(\d+)/i);
+      const m5 = u.match(/(\d{8,14})(?:[/?#]|$)/);
+      if (m1) rowObj.product_id = m1[2];
+      else if (m2) rowObj.product_id = m2[2];
+      else if (m3) rowObj.product_id = m3[2];
+      else if (m4) rowObj.product_id = m4[1];
+      else if (m5) rowObj.product_id = m5[1];
+    }
 
     rows.push(rowObj);
   }

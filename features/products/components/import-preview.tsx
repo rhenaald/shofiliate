@@ -4,6 +4,7 @@ import {
   AlertCircleIcon,
   ArrowLeftIcon,
   CheckCircle2Icon,
+  DownloadIcon,
   ExternalLinkIcon,
   FileSpreadsheetIcon,
   Loader2Icon,
@@ -144,6 +145,62 @@ export function ImportPreview({
     }
   };
 
+  const handleDownloadCsv = () => {
+    if (!rows || rows.length === 0) return;
+    const headers = [
+      "product_id",
+      "product_name",
+      "seller_name",
+      "rating",
+      "commission_live_rate",
+      "commission_live_amount",
+      "commission_video_rate",
+      "commission_social_rate",
+      "has_komisi_xtra",
+      "affiliate_link",
+      "product_url",
+      "sales_30d",
+      "gmv_30d",
+    ];
+
+    const escapeCsv = (val: unknown) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((r) =>
+        [
+          escapeCsv(r.product_id),
+          escapeCsv(r.product_name),
+          escapeCsv(r.seller_name),
+          escapeCsv(r.rating ?? r.rating_star),
+          escapeCsv(r.commission_live_rate ?? r.commission_rate),
+          escapeCsv(r.commission_live_amount ?? r.commission_amount),
+          escapeCsv(r.commission_video_rate),
+          escapeCsv(r.commission_social_rate),
+          escapeCsv(r.has_komisi_xtra ? "1" : "0"),
+          escapeCsv(r.affiliate_link || r.affiliate_url),
+          escapeCsv(r.product_url || r.url),
+          escapeCsv(r.sales_30d),
+          escapeCsv(r.gmv_30d),
+        ].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `shofiliate-enriched-${fileName.replace(/\.[^/.]+$/, "") || "products"}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Info */}
@@ -189,6 +246,19 @@ export function ImportPreview({
               Lengkapi Komisi & Link
             </Button>
           )}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadCsv}
+            disabled={isLoading || isEnriching}
+            className="cursor-pointer"
+            title="Unduh file CSV hasil kurasi dan komisi ke komputer"
+          >
+            <DownloadIcon className="size-3.5 mr-1.5" />
+            Unduh CSV
+          </Button>
 
           <Button
             type="button"

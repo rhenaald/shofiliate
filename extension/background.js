@@ -410,10 +410,16 @@ async function executeBatchDirectInTab(tabId, affDomain, batchItems) {
               }
             }`,
             variables: {
-              linkParams: items.map((it) => ({
-                originalLink: it.url,
-                advancedLinkParams: { subId1: "shofiliate" },
-              })),
+              linkParams: items.map((it) => {
+                let targetUrl = it.canonicalUrl || it.url;
+                if (targetUrl && !targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+                  targetUrl = "https://" + targetUrl;
+                }
+                return {
+                  originalLink: targetUrl,
+                  advancedLinkParams: { subId1: "shofiliate" },
+                };
+              }),
               sourceCaller: "CUSTOM_LINK_CALLER",
             },
           };
@@ -732,18 +738,44 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
 
   sendProgress(0, "Menghubungkan ke Shopee Affiliate...");
 
+  // Helper untuk mencari nilai property dari baris data dengan berbagai variasi penamaan
+  const getVal = (obj, keys) => {
+    for (const k of keys) {
+      if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
+        return String(obj[k]).trim();
+      }
+    }
+    const allKeys = Object.keys(obj);
+    for (const k of keys) {
+      const cleanK = k.toLowerCase().replace(/[\s\-_.]+/g, "");
+      const found = allKeys.find((ak) => ak.toLowerCase().replace(/[\s\-_.]+/g, "") === cleanK);
+      if (found && obj[found] !== undefined && obj[found] !== null && String(obj[found]).trim() !== "") {
+        return String(obj[found]).trim();
+      }
+    }
+    return "";
+  };
+
   // 1. Ekstrak data dan deteksi region dominan
   const preparedItems = rows.map((row, idx) => {
-    let itemId = String(row.product_id || row.itemId || row.item_id || "").trim();
-    const rawUrl = String(row.product_url || row.url || "").trim();
+    let itemId = getVal(row, ["product_id", "itemId", "item_id", "productId", "id"]);
+    let rawUrl = getVal(row, ["product_url", "url", "link", "product_link", "item_url", "affiliate_link", "affiliate_url"]);
+
+    if (rawUrl && !rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+      rawUrl = "https://" + rawUrl;
+    }
 
     if (!itemId && rawUrl) {
       const m1 = rawUrl.match(/\/product\/(\d+)\/(\d+)/);
-      const m2 = rawUrl.match(/-i\.(\d+)\.(\d+)/);
-      const m3 = rawUrl.match(/\/offer\/product_offer\/(\d+)/);
+      const m2 = rawUrl.match(/(?:[.\-_]i|i)\.(\d+)\.(\d+)/i);
+      const m3 = rawUrl.match(/\/offer\/product_offer\/(\d+)/i);
+      const m4 = rawUrl.match(/[?&](?:item_?id|itemid|id)=(\d+)/i);
+      const m5 = rawUrl.match(/(\d{8,14})(?:[/?#]|$)/);
       if (m1) itemId = m1[2];
       else if (m2) itemId = m2[2];
       else if (m3) itemId = m3[1];
+      else if (m4) itemId = m4[1];
+      else if (m5) itemId = m5[1];
     }
 
     let rowRegion = defaultRegion || "ID";
@@ -755,13 +787,16 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
     else if (rawUrl.includes(".vn")) rowRegion = "VN";
 
     const mainDomain = REGION_MAIN_DOMAINS[rowRegion] || "shopee.co.id";
-    const productUrl = rawUrl || (itemId ? `https://${mainDomain}/product/0/${itemId}` : "");
+    const canonicalProductUrl = itemId ? `https://${mainDomain}/product/0/${itemId}` : rawUrl;
+    const productUrl = canonicalProductUrl || rawUrl;
 
     return {
       idx,
       row,
       itemId,
       url: productUrl,
+      canonicalUrl: canonicalProductUrl,
+      rawUrl,
       region: rowRegion,
     };
   });
