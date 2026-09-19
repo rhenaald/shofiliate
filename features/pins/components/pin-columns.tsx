@@ -11,7 +11,8 @@ import {
   ArrowUpDown,
   Copy,
   ExternalLink,
-  Pin,
+  Pencil,
+  PinOff,
 } from "lucide-react";
 
 import type { DataTableFeatures } from "@/components/data-table";
@@ -28,9 +29,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { CatalogRow, CatalogView } from "@/features/catalog/types";
-import { COLUMN_SORT_ID } from "@/features/catalog/types";
-import type { CatalogSortId } from "@/features/catalog/schemas";
+import type { PinsSortId } from "@/features/pins/schemas";
+import { PIN_COLUMN_SORT_ID } from "@/features/pins/types";
+import type { PinDTO } from "@/features/pins/types";
 
 // Simbol mata uang asli (amount disimpan tanpa simbol di DB).
 const CURRENCY_SYMBOL: Record<string, string> = {
@@ -84,25 +85,28 @@ function formatGrowth(growth: number): string {
   return `${sign}${growth}%`;
 }
 
-export interface ProductColumnSort {
-  sortId: CatalogSortId | null;
+export function formatPinDate(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export interface PinBoardColumnSort {
+  sortId: PinsSortId | null;
   sortDir: "asc" | "desc";
   onSort: (columnId: string) => void;
 }
 
-export interface ProductPinActions {
-  /** ID produk yang sedang aktif di-pin (indikator terisi). */
-  pinnedIds: Set<string>;
-  /** Pin tanpa note; tanpa-op bila sudah pinned (server idempoten). */
-  onPin: (productId: string) => void;
-  /** Kunci tombol saat mutasi berjalan (anti double-click). */
-  pinPending: boolean;
+export interface PinColumnActions {
+  onEditNote: (pin: PinDTO) => void;
+  onUnpin: (pin: PinDTO) => void;
 }
 
-export function createProductColumns(
-  view: CatalogView,
-  opts: ProductColumnSort & ProductPinActions,
-): ColumnDef<DataTableFeatures, CatalogRow>[] {
+/** Kolom board pins paritas katalog + kolom khas pin (catatan/pemin/waktu).
+ *  Klik header sort server via URL (opts.onSort) — bukan sort lokal. */
+export function createPinBoardColumns(
+  opts: PinBoardColumnSort & PinColumnActions,
+): ColumnDef<DataTableFeatures, PinDTO>[] {
   const header = (
     columnId: string,
     label: string,
@@ -111,15 +115,16 @@ export function createProductColumns(
     header: () => (
       <SortHeader
         label={label}
-        active={opts.sortId === COLUMN_SORT_ID[columnId] ? opts.sortDir : null}
+        active={
+          opts.sortId === PIN_COLUMN_SORT_ID[columnId] ? opts.sortDir : null
+        }
         onToggle={() => opts.onSort(columnId)}
         align={align}
       />
     ),
   });
-
   return [
-    withSelectColumn<CatalogRow>(),
+    withSelectColumn<PinDTO>(),
     {
       id: "productName",
       accessorKey: "name",
@@ -130,7 +135,7 @@ export function createProductColumns(
             href={row.original.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="line-clamp-2 max-w-56 whitespace-normal font-medium text-primary hover:underline"
+            className="line-clamp-2 max-w-56 font-medium whitespace-normal text-primary hover:underline"
           >
             {row.original.name}
           </a>
@@ -228,15 +233,9 @@ export function createProductColumns(
     {
       id: "totalSales",
       accessorKey: "totalSales",
-      ...header("totalSales", "Sold", "right"),
+      ...header("totalSales", "Total Sales", "right"),
       cell: ({ row }) => (
-        <span
-          className={
-            view === "best"
-              ? "block text-right font-bold tabular-nums"
-              : "block text-right font-semibold tabular-nums"
-          }
-        >
+        <span className="block text-right font-semibold tabular-nums">
           {row.original.totalSales.toLocaleString("en-US")}
         </span>
       ),
@@ -302,41 +301,6 @@ export function createProductColumns(
         );
       },
     },
-    // ---- PRD columns (hidden by default via table initial columnVisibility) ----
-    {
-      id: "pin",
-      header: () => <span className="sr-only">Pin</span>,
-      enableSorting: false,
-      cell: ({ row }) => {
-        const pinned = opts.pinnedIds.has(row.original.productId);
-        return (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={pinned ? "Sudah di-pin" : "Pin produk"}
-                  disabled={pinned || opts.pinPending}
-                  onClick={() => opts.onPin(row.original.productId)}
-                >
-                  <Pin
-                    className={
-                      pinned ? "size-3.5 fill-current" : "size-3.5"
-                    }
-                  />
-                </Button>
-              }
-            />
-            <TooltipContent>
-              {pinned
-                ? "Sudah di-pin — kelola di halaman Pins"
-                : "Pin ke board bersama"}
-            </TooltipContent>
-          </Tooltip>
-        );
-      },
-    },
     {
       id: "region",
       accessorKey: "region",
@@ -351,13 +315,7 @@ export function createProductColumns(
       accessorKey: "sales30d",
       ...header("sales30d", "Sales 30d", "right"),
       cell: ({ row }) => (
-        <span
-          className={
-            view === "trending"
-              ? "block text-right font-semibold text-primary tabular-nums"
-              : "block text-right tabular-nums"
-          }
-        >
+        <span className="block text-right tabular-nums">
           {row.original.sales30d.toLocaleString("en-US")}
         </span>
       ),
@@ -386,7 +344,7 @@ export function createProductColumns(
       accessorKey: "gmv30d",
       ...header("gmv30d", "GMV 30d", "right"),
       cell: ({ row }) => (
-        <span className="block text-right whitespace-nowrap tabular-nums">
+        <span className="block whitespace-nowrap text-right tabular-nums">
           {formatMoney(row.original.gmv30d, row.original.currency)}
         </span>
       ),
@@ -403,44 +361,41 @@ export function createProductColumns(
       ),
       sortFn: sortFn_text,
     },
-    withActionColumn<CatalogRow>({
-      getItems: (data) => {
-        const pinned = opts.pinnedIds.has(data.productId);
-        return [
-          {
-            id: "open",
-            label: "Lihat di Shopee",
-            icon: ExternalLink,
-            onSelect: () => {
-              if (data.url)
-                window.open(data.url, "_blank", "noopener,noreferrer");
-            },
+    withActionColumn<PinDTO>({
+      header: "Aksi",
+      getItems: (pin) => [
+        {
+          id: "open",
+          label: "Lihat di Shopee",
+          icon: ExternalLink,
+          onSelect: () => {
+            if (pin.url)
+              window.open(pin.url, "_blank", "noopener,noreferrer");
           },
-          {
-            id: "pin",
-            label: pinned ? "Sudah di-pin" : "Pin",
-            icon: Pin,
-            disabled: pinned,
-            onSelect: () => opts.onPin(data.productId),
-          },
-          {
-            id: "fix-region",
-            label: "Koreksi region",
-            onSelect: () =>
-              toast.add({ title: "Koreksi region — coming in SH-8" }),
-          },
-        ];
-      },
+        },
+        {
+          id: "edit-note",
+          label: "Edit catatan",
+          icon: Pencil,
+          onSelect: () => opts.onEditNote(pin),
+        },
+        {
+          id: "unpin",
+          label: "Unpin",
+          icon: PinOff,
+          onSelect: () => opts.onUnpin(pin),
+        },
+      ],
     }),
   ];
 }
 
-export const SORTABLE_COLUMNS = [
+export const PINS_SORTABLE_COLUMNS = [
   { id: "productName", label: "Product Name" },
   { id: "likes", label: "Likes" },
-  { id: "totalSales", label: "Sold" },
   { id: "sales30d", label: "Sales 30d" },
   { id: "growth30d", label: "Growth 30d" },
+  { id: "totalSales", label: "Total Sales" },
   { id: "gmv30d", label: "GMV 30d" },
   { id: "listedOn", label: "Listed On" },
 ] as const;

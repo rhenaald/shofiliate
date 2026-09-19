@@ -20,23 +20,24 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
+import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import {
-  Copy,
-  Pin,
-  Download,
-  ChevronDown,
   ChevronsLeft,
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  ChevronDown,
+  Pin,
+  PinOff,
+  Plus,
 } from "lucide-react";
 
 import { BulkActionBar } from "@/components/shared/data-table/bulk-action-bar";
 import { DataTableViewOptions } from "@/components/shared/data-table/view-options";
 import { Button } from "@/components/ui/button";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +45,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -55,19 +56,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
-import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { unpin } from "@/features/pins/actions/toggle-pin";
 import {
-  SORTABLE_COLUMNS,
-  createProductColumns,
-} from "@/features/catalog/components/product-columns";
-import {
-  COLUMN_SORT_ID,
-  type CatalogRow,
-  type CatalogView,
-} from "@/features/catalog/types";
-import type { CatalogSortId } from "@/features/catalog/schemas";
-import { togglePin } from "@/features/pins/actions/toggle-pin";
+  PINS_SORTABLE_COLUMNS,
+  createPinBoardColumns,
+} from "@/features/pins/components/pin-columns";
+import type { PinsSortId } from "@/features/pins/schemas";
+import { PIN_COLUMN_SORT_ID } from "@/features/pins/types";
+import type { PinDTO } from "@/features/pins/types";
 
 const features = tableFeatures({
   columnFilteringFeature,
@@ -83,94 +79,68 @@ const features = tableFeatures({
   sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
 });
 
-interface ProductTableProps {
-  data: CatalogRow[];
+interface PinsTableProps {
+  data: PinDTO[];
   total: number;
   page: number;
   pageSize: number;
-  view: CatalogView;
-  sortId: CatalogSortId | null;
+  sortId: PinsSortId | null;
   sortDir: "asc" | "desc";
-  pinnedProductIds: string[];
   onSortChange: (columnId: string) => void;
   onSelectDirection: (dir: "asc" | "desc") => void;
   onClearSort: () => void;
+  onEditNote: (pin: PinDTO) => void;
+  onUnpin: (pin: PinDTO) => void;
+  onAddPin: () => void;
+  /** Buka Sheet detail pin saat body baris diklik. */
+  onRowOpen: (pin: PinDTO) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
-  onClearFilters: () => void;
+  /** Query + region aktif dari URL — untuk deskripsi empty state. */
+  query: string;
+  region: string;
   isLoading?: boolean;
 }
 
-export function ProductTable({
+export function PinsTable({
   data,
   total,
   page,
   pageSize,
-  view,
   sortId,
   sortDir,
-  pinnedProductIds,
   onSortChange,
   onSelectDirection,
   onClearSort,
+  onEditNote,
+  onUnpin,
+  onAddPin,
+  onRowOpen,
   onPageChange,
   onPageSizeChange,
-  onClearFilters,
+  query,
+  region,
   isLoading = false,
-}: ProductTableProps) {
+}: PinsTableProps) {
   const router = useRouter();
-  const pinnedIds = React.useMemo(
-    () => new Set(pinnedProductIds),
-    [pinnedProductIds],
-  );
-
-  const pinMutation = useMutation({
-    mutationKey: ["catalog", "pin"],
-    mutationFn: (productId: string) => togglePin({ productId }),
-  });
-
-  const handlePin = React.useCallback(
-    (productId: string) => {
-      if (pinnedIds.has(productId) || pinMutation.isPending) return;
-      pinMutation.mutate(productId, {
-        onSuccess: () => {
-          toast.add({ title: "Produk di-pin" });
-          router.refresh();
-        },
-        onError: (error) => {
-          toast.add({
-            title:
-              error instanceof Error ? error.message : "Gagal mem-pin produk",
-          });
-        },
-      });
-    },
-    [pinMutation, pinnedIds, router],
-  );
-
-  const pinPending = pinMutation.isPending;
-
   const columns = React.useMemo(
     () =>
-      createProductColumns(view, {
+      createPinBoardColumns({
         sortId,
         sortDir,
         onSort: onSortChange,
-        pinnedIds,
-        onPin: handlePin,
-        pinPending,
+        onEditNote,
+        onUnpin,
       }),
-    [view, sortId, sortDir, onSortChange, pinnedIds, handlePin, pinPending],
+    [sortId, sortDir, onSortChange, onEditNote, onUnpin],
   );
-  // Urutan baris adalah otoritas server (sort per view / ?sort&dir).
-  // Sorting interaktif lokal dimatikan agar tidak menyesatkan (hanya 1 halaman terlihat).
+  // Urutan baris adalah otoritas server (pinnedAt desc default / ?sort&dir).
+  // Sorting interaktif lokal dimatikan agar tidak menyesatkan.
   const [sorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    [],
-  );
+  const [columnFilters, setColumnFilters] =
+    React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] =
     React.useState<ColumnVisibilityState>({
-      pin: false,
       region: false,
       sales30d: false,
       growth30d: false,
@@ -208,15 +178,67 @@ export function ProductTable({
     },
   });
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
-  const [jumpKey, setJumpKey] = React.useState<number | null>(null);
-  const [jumpValue, setJumpValue] = React.useState("");
   const pageCount = table.getPageCount();
+
+  const bulkUnpinMutation = useMutation({
+    mutationKey: ["pins", "bulk-unpin"],
+    mutationFn: async (pinIds: string[]) => {
+      await Promise.all(pinIds.map((id) => unpin({ pinId: id })));
+      return pinIds.length;
+    },
+  });
+
+  const bulkActions = React.useMemo(
+    () => [
+      {
+        id: "unpin",
+        label: "Unpin",
+        icon: PinOff,
+        onClick: () => {
+          if (bulkUnpinMutation.isPending) return;
+          const ids = table
+            .getFilteredSelectedRowModel()
+            .rows.map((r) => r.original.pinId);
+          if (ids.length === 0) return;
+          bulkUnpinMutation.mutate(ids, {
+            onSuccess: (count) => {
+              toast.add({ title: `${count} pin dihapus` });
+              table.resetRowSelection();
+              router.refresh();
+            },
+            onError: (error) => {
+              toast.add({
+                title:
+                  error instanceof Error
+                    ? error.message
+                    : "Gagal menghapus pin",
+              });
+            },
+          });
+        },
+      },
+    ],
+    [table, bulkUnpinMutation, router],
+  );
+
+  const activeColumnId =
+    Object.keys(PIN_COLUMN_SORT_ID).find(
+      (c) => PIN_COLUMN_SORT_ID[c] === sortId,
+    ) ?? null;
+
+  // Satu diksi untuk semua kondisi kosong: judul netral yang sama +
+  // deskripsi menyebut cakupan aktif (query/region) + satu aksi Tambah pin.
+  const trimmedQuery = query.trim();
+  const emptyDescription =
+    trimmedQuery !== "" && region !== "MY"
+      ? `Tidak ada pin untuk “${trimmedQuery}” di region ${region}. Coba kata kunci atau region lain.`
+      : trimmedQuery !== ""
+        ? `Tidak ada pin untuk “${trimmedQuery}”. Coba kata kunci lain.`
+        : `Tidak ada pin di region ${region}. Coba tambah pin baru.`;
 
   function pageItems(current: number, total: number): (number | "ellipsis")[] {
     if (total <= 7) return Array.from({ length: total }, (_, i) => i);
-    const pages = [
-      ...new Set([0, total - 1, current - 1, current, current + 1]),
-    ]
+    const pages = [...new Set([0, total - 1, current - 1, current, current + 1])]
       .filter((p) => p >= 0 && p < total)
       .sort((a, b) => a - b);
     const out: (number | "ellipsis")[] = [];
@@ -229,82 +251,13 @@ export function ProductTable({
     return out;
   }
 
-  function goJump() {
-    const n = Number.parseInt(jumpValue, 10);
-    if (Number.isFinite(n))
-      table.setPageIndex(
-        Math.min(Math.max(n - 1, 0), Math.max(pageCount - 1, 0)),
-      );
-    setJumpKey(null);
-  }
-
-  const bulkPinMutation = useMutation({
-    mutationKey: ["catalog", "bulk-pin"],
-    mutationFn: async (productIds: string[]) => {
-      await Promise.all(productIds.map((id) => togglePin({ productId: id })));
-      return productIds.length;
-    },
-  });
-
-  const bulkActions = React.useMemo(
-    () => [
-      {
-        id: "pin",
-        label: "Pin",
-        icon: Pin,
-        onClick: () => {
-          if (bulkPinMutation.isPending) return;
-          const ids = table
-            .getFilteredSelectedRowModel()
-            .rows.map((r) => r.original.productId)
-            .filter((id) => !pinnedIds.has(id));
-          if (ids.length === 0) {
-            toast.add({ title: "Semua produk terpilih sudah di-pin" });
-            return;
-          }
-          bulkPinMutation.mutate(ids, {
-            onSuccess: (count) => {
-              toast.add({ title: `${count} produk di-pin` });
-              table.resetRowSelection();
-              router.refresh();
-            },
-            onError: (error) => {
-              toast.add({
-                title:
-                  error instanceof Error
-                    ? error.message
-                    : "Gagal mem-pin produk",
-              });
-            },
-          });
-        },
-      },
-      {
-        id: "copy-link",
-        label: "Copy link",
-        icon: Copy,
-        onClick: () => toast.add({ title: "Copy link — coming in SH-6" }),
-      },
-      {
-        id: "export",
-        label: "Export",
-        icon: Download,
-        onClick: () => toast.add({ title: "Export — coming in SH-6" }),
-      },
-    ],
-    [table, pinnedIds, bulkPinMutation, router],
-  );
-
-  const activeColumnId =
-    Object.keys(COLUMN_SORT_ID).find((c) => COLUMN_SORT_ID[c] === sortId) ??
-    null;
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm text-muted-foreground">{total} pin aktif</p>
         <DataTableViewOptions
           table={table}
-          sortableColumns={SORTABLE_COLUMNS}
+          sortableColumns={PINS_SORTABLE_COLUMNS}
           activeColumnId={activeColumnId}
           direction={sortDir}
           onSelectColumn={onSortChange}
@@ -312,12 +265,8 @@ export function ProductTable({
           onClearSort={onClearSort}
         />
       </div>
-      {/* FIXME: Table container x-overflow not fully contained within layout bounds. Investigate and constrain horizontal overflow properly. */}
       <ScrollArea className="w-full rounded-md border">
-        <Table
-          containerClassName="overflow-visible"
-          className="w-full min-w-max"
-        >
+        <Table containerClassName="overflow-visible" className="w-full min-w-max">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
@@ -352,6 +301,19 @@ export function ProductTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    // Klik pada elemen interaktif (link, tombol, checkbox)
+                    // ditangani elemen itu sendiri — bukan buka Sheet.
+                    const el = e.target as HTMLElement;
+                    if (
+                      el.closest(
+                        "a,button,input,select,textarea,[role='menu'],[role='menuitem']",
+                      )
+                    )
+                      return;
+                    onRowOpen(row.original);
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
@@ -369,21 +331,29 @@ export function ProductTable({
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  <div className="flex flex-col items-center gap-2 py-6">
-                    <p>No results.</p>
+                <TableCell colSpan={columns.length} className="px-4 py-12">
+                  <div
+                    role="status"
+                    className="mx-auto flex max-w-sm flex-col items-center gap-2 text-center"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground"
+                    >
+                      <Pin className="size-5" />
+                    </span>
+                    <p className="text-sm font-semibold">Tidak ada hasil</p>
+                    <p className="text-xs text-muted-foreground">
+                      {emptyDescription}
+                    </p>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        table.resetColumnFilters();
-                        onClearFilters();
-                      }}
+                      onClick={onAddPin}
+                      className="mt-1"
                     >
-                      Clear filters
+                      <Plus className="size-3.5" />
+                      Tambah pin
                     </Button>
                   </div>
                 </TableCell>
@@ -446,43 +416,12 @@ export function ProductTable({
           </Button>
           {pageItems(page - 1, pageCount).map((item, i) =>
             item === "ellipsis" ? (
-              jumpKey === i ? (
-                <span key={`jump-${i}`} className="flex items-center gap-1">
-                  <Input
-                    autoFocus
-                    value={jumpValue}
-                    onChange={(e) => setJumpValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") goJump();
-                    }}
-                    placeholder="#"
-                    aria-label="Go to page number"
-                    className="h-8 w-16"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={goJump}
-                  >
-                    Go
-                  </Button>
-                </span>
-              ) : (
-                <Button
-                  key={`ellipsis-${i}`}
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-2"
-                  onClick={() => {
-                    setJumpValue("");
-                    setJumpKey(i);
-                  }}
-                  aria-label="Go to specific page"
-                >
-                  ...
-                </Button>
-              )
+              <span
+                key={`ellipsis-${i}`}
+                className="px-1 text-sm text-muted-foreground"
+              >
+                ...
+              </span>
             ) : (
               <Button
                 key={item}
