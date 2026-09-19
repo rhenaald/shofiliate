@@ -410,6 +410,8 @@ async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
     await new Promise((r) => setTimeout(r, 300));
 
     // Jalankan setiap worker untuk mengambil tugas dari antrean secara paralel
+    const completedItemIds = new Set();
+
     const workers = workerTabs.map(async (tab, workerIdx) => {
       while (queue.length > 0) {
         const it = queue.shift();
@@ -418,7 +420,7 @@ async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
         const targetUrl = `https://${domain}/offer/product_offer/${it.itemId}`;
         try {
           if (onProgressItem) {
-            onProgressItem(it, `Worker ${workerIdx + 1}: ${it.row?.product_name || it.itemId}`);
+            onProgressItem(completedItemIds.size, `Worker ${workerIdx + 1}: ${it.row?.product_name || it.itemId}`);
           }
 
           // Arahkan tab yang sama ke URL produk berikutnya (tanpa buka-tutup tab!)
@@ -437,21 +439,33 @@ async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
           const data = res?.[0]?.result;
           const isSuccess = data && (data.live || data.social || data.video || data.affiliateLink || (data.price && data.price > 0));
 
-          if (isSuccess) {
+          if (data?.notFound) {
+            // Produk memang tidak ada di portal affiliate
             resultsMap[it.itemId] = data;
+            completedItemIds.add(it.itemId);
+          } else if (isSuccess) {
+            resultsMap[it.itemId] = data;
+            completedItemIds.add(it.itemId);
           } else if (!it._retried) {
             // Jika run pertama belum sempat merender data komisi, coba sekali lagi
             it._retried = true;
             queue.push(it);
-          } else if (data) {
-            resultsMap[it.itemId] = data;
+          } else {
+            if (data) resultsMap[it.itemId] = data;
+            completedItemIds.add(it.itemId);
           }
         } catch (err) {
           console.warn(`[Shofiliate Worker ${workerIdx + 1}] Gagal scrape ${it.itemId}:`, err);
           if (!it._retried) {
             it._retried = true;
             queue.push(it);
+          } else {
+            completedItemIds.add(it.itemId);
           }
+        }
+
+        if (onProgressItem) {
+          onProgressItem(completedItemIds.size, `Worker ${workerIdx + 1}: Selesai ${it.row?.product_name || it.itemId}`);
         }
 
         // Jeda 350ms antar produk agar aman dan ramah server Shopee
@@ -808,12 +822,13 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
   const enrichedRows = new Array(total);
 
   const sendProgress = (completed, currentName = "") => {
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 100;
+    const safeCompleted = Math.min(Math.max(0, completed), total);
+    const percentage = total > 0 ? Math.min(100, Math.round((safeCompleted / total) * 100)) : 100;
     const progressData = {
       source: "shofiliate-companion-background",
       type: "ENRICH_PROGRESS",
       requestId,
-      completed,
+      completed: safeCompleted,
       total,
       percentage,
       currentProduct: currentName,
@@ -1005,12 +1020,12 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
     if (itemsNeedingAutomation.length > 0) {
       sendProgress(processedCount, `Menjalankan Worker Paralel (${itemsNeedingAutomation.length} produk)...`);
 
+      const baseCompleted = processedCount;
       const automatedResults = await enrichItemsWithWorkerPool(
         itemsNeedingAutomation,
         affDomain,
-        (it, statusText) => {
-          processedCount++;
-          sendProgress(processedCount, statusText);
+        (doneInPool, statusText) => {
+          sendProgress(baseCompleted + doneInPool, statusText);
         }
       );
 
@@ -1204,6 +1219,34 @@ async function runAutomateInPage(targetItemId) {
       break;
     }
     await sleep(100);
+  }
+
+  // 0.2 Cek apakah produk tidak ditemukan / dialihkan / 404
+  const currentPath = window.location.pathname;
+  const isRedirectedAway = Boolean(
+    targetItemId &&
+    !currentPath.includes(String(targetItemId)) &&
+    !window.location.href.includes(String(targetItemId))
+  );
+
+  const pageText = document.body ? document.body.innerText.toLowerCase() : "";
+  const isNotFound =
+    isRedirectedAway ||
+    pageText.includes("produk tidak ditemukan") ||
+    pageText.includes("penawaran tidak ditemukan") ||
+    pageText.includes("penawaran telah berakhir") ||
+    pageText.includes("item not found") ||
+    pageText.includes("offer not found") ||
+    pageText.includes("halaman tidak ditemukan") ||
+    pageText.includes("404");
+
+  if (isNotFound) {
+    return {
+      itemId: targetItemId || "",
+      notFound: true,
+      error: "PRODUCT_NOT_FOUND",
+      message: "Produk tidak ditemukan atau tidak memiliki penawaran affiliate di Shopee.",
+    };
   }
 
   // 1. Ekstrak Item ID dari URL jika ada
@@ -1709,8 +1752,18 @@ async function runAutomateInPage(targetItemId) {
 
 // Format data hasil scrape menjadi payload lengkap untuk web app Shofiliate
 function formatProductResult(d, region = "ID") {
-  const mainDomain = REGION_MAIN_DOMAINS[region] || "shopee.co.id";
   const itemId = d.itemId || "";
+
+  // Jika produk tidak ditemukan di Shopee Affiliate, jangan timpa data mentah produk
+  if (d.notFound) {
+    return {
+      product_id: itemId,
+      affiliate_link: "",
+      affiliate_url: "",
+    };
+  }
+
+  const mainDomain = REGION_MAIN_DOMAINS[region] || "shopee.co.id";
   const productUrl = itemId ? `https://${mainDomain}/product/0/${itemId}` : "";
   const affLink = (d.affiliateLink && !d.affiliateLink.includes("/offer/product_offer/"))
     ? d.affiliateLink
