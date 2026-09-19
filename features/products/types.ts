@@ -102,6 +102,7 @@ export type StagingRow = RawImportRow & {
   _fileName: string;
   _rowNumber: number;
   _valid: boolean;
+  _duplicate?: boolean;
   _error?: { field: string; reason: string };
 };
 

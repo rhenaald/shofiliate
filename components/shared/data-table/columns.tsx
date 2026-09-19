@@ -49,6 +49,7 @@ export function withSelectColumn<T extends RowData>(): ColumnDef<DataTableFeatur
         role="checkbox"
         aria-label="Pilih baris"
         checked={row.getIsSelected()}
+        disabled={!row.getCanSelect()}
         onChange={(e) => row.toggleSelected(e.target.checked)}
         className="size-4 accent-current"
       />

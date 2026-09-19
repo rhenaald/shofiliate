@@ -31,7 +31,7 @@ export async function createStagingFile(params: { fileName: string; rows: RawImp
   return created;
 }
 
-const STRIP_KEYS = ["_stagingId", "_fileId", "_fileName", "_rowNumber", "_valid", "_error"] as const;
+const STRIP_KEYS = ["_stagingId", "_fileId", "_fileName", "_rowNumber", "_valid", "_duplicate", "_error"] as const;
 
 export async function saveStaging(params: { fileIds?: string[]; selectedIds?: string[] }): Promise<SaveStagingResult> {
   const session = await requireSession();
@@ -42,13 +42,30 @@ export async function saveStaging(params: { fileIds?: string[]; selectedIds?: st
     if (selected) return selected.has(r._stagingId);
     return true;
   });
+  const fileIds = Array.from(new Set(target.map((r) => r._fileId)));
+  const unionFileNames = Array.from(
+    new Set(union.map((r) => String(r._fileName ?? "").trim()).filter((n) => n.length > 0)),
+  );
+  const joinedNames = unionFileNames.join(", ");
+  const fileName = joinedNames.length > 120 ? `${joinedNames.slice(0, 117)}...` : joinedNames || "staging-import";
+  if (target.length === 0) {
+    return {
+      batchId: "",
+      fileName,
+      totalRows: 0,
+      imported: 0,
+      updated: 0,
+      duplicates: 0,
+      failed: 0,
+      errors: [],
+      stagingFileIds: [],
+    };
+  }
   const rawRows: RawImportRow[] = target.map((r) => {
     const copy: Record<string, unknown> = { ...r };
     for (const k of STRIP_KEYS) delete copy[k];
     return copy as RawImportRow;
   });
-  const fileIds = Array.from(new Set(union.map((r) => r._fileId)));
-  const fileName = `staging-${fileIds.length}-files`;
   const result = await importProducts({ fileName, rows: rawRows });
   if (fileIds.length > 0) {
     await prisma.importStagingFile.updateMany({

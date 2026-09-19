@@ -39,6 +39,7 @@ export function StagingTable({ data: initial, onSaveSelected, onSaveAll, isSavin
     state: { rowSelection, sorting, pagination },
   });
   const selectedIds = table.getSelectedRowIds();
+  const validCount = data.filter((r) => r._valid).length;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -50,7 +51,7 @@ export function StagingTable({ data: initial, onSaveSelected, onSaveAll, isSavin
         }}>
           <CheckCheckIcon className="size-3.5 mr-1.5" /> Pilih semua hasil filter ({table.getFilteredRowModel().rows.filter((r) => r.getCanSelect()).length})
         </Button>
-        <Button size="sm" onClick={onSaveAll} disabled={isSaving}>
+        <Button size="sm" onClick={onSaveAll} disabled={isSaving || validCount === 0}>
           <SaveIcon className="size-3.5 mr-1.5" /> Masukkan semua
         </Button>
         <DataTableViewOptions table={table} sortableColumns={SORTABLE_STAGING_COLUMNS} activeColumnId={sorting.length > 0 ? String(sorting[0].id) : null} direction={sorting.length > 0 && sorting[0].desc === false ? "asc" : "desc"} onSelectColumn={(colId) => setSorting([{ id: colId, desc: true }])} onSelectDirection={(dir) => setSorting((s) => (s.length > 0 ? [{ id: s[0].id, desc: dir === "desc" }] : s))} onClearSort={() => setSorting([])} />
