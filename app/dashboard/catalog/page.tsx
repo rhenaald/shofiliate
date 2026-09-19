@@ -1,8 +1,11 @@
-import { ProductsPage } from "@/features/catalog/pages/products-page";
-import { getTodayProgress } from "@/features/catalog/data/get-today-progress";
-import { listProducts } from "@/features/catalog/data/list-products";
-import { getPinnedProductIds } from "@/features/pins/data/get-pinned-product-ids";
+import { Suspense } from "react";
+
+import { Skeleton } from "@/components/ui/skeleton";
 import { catalogParamsSchema } from "@/features/catalog/schemas";
+import {
+  CatalogProgress,
+  CatalogTableStream,
+} from "@/features/catalog/pages/catalog-results";
 
 interface CatalogRouteProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -21,10 +24,17 @@ export default async function CatalogRoute({ searchParams }: CatalogRouteProps) 
     sort: Array.isArray(sp.sort) ? sp.sort[0] : sp.sort,
     dir: Array.isArray(sp.dir) ? sp.dir[0] : sp.dir,
   });
-  const [result, progress, pinnedProductIds] = await Promise.all([
-    listProducts(params),
-    getTodayProgress(),
-    getPinnedProductIds(),
-  ]);
-  return <ProductsPage params={params} result={result} progress={progress} pinnedProductIds={pinnedProductIds} />;
+  return (
+    <div className="space-y-4 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold">Products</h1>
+          <Suspense fallback={<Skeleton className="h-5 w-40" />}>
+            <CatalogProgress />
+          </Suspense>
+        </div>
+      </div>
+      <CatalogTableStream params={params} />
+    </div>
+  );
 }
