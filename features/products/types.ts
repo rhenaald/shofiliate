@@ -95,3 +95,16 @@ export type ImportPreviewData = {
   previewRows: ParsedProductRow[];
   previewErrors: ImportRowError[];
 };
+
+export type StagingRow = RawImportRow & {
+  _stagingId: string;
+  _fileId: string;
+  _fileName: string;
+  _rowNumber: number;
+  _valid: boolean;
+  _error?: { field: string; reason: string };
+};
+
+export type SaveStagingResult = ImportBatchResult & {
+  stagingFileIds: string[];
+};
