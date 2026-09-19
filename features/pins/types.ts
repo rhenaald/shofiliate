@@ -42,6 +42,8 @@ export interface PinDTO {
   category: string;
   listedOn: string | null;
   likes: number;
+  sales1d: number;
+  sales7d: number;
   sales30d: number;
   growth30d: number;
   totalSales: number;

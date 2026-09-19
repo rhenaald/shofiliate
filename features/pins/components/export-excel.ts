@@ -23,6 +23,8 @@ export function exportPinsToExcel(
     "Komisi Social":
       row.commissionSocialAmount != null ? row.commissionSocialAmount : "-",
     "Total Terjual": row.totalSales,
+    "Penjualan 1 Hari": row.sales1d,
+    "Penjualan 7 Hari": row.sales7d,
     "Penjualan 30 Hari": row.sales30d,
     "Growth 30 Hari (%)":
       row.growth30d != null ? `${row.growth30d}%` : "-",
