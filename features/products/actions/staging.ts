@@ -31,6 +31,8 @@ export async function createStagingFile(params: { fileName: string; rows: RawImp
   return created;
 }
 
+const STRIP_KEYS = ["_stagingId", "_fileId", "_fileName", "_rowNumber", "_valid", "_error"] as const;
+
 export async function saveStaging(params: { fileIds?: string[]; selectedIds?: string[] }): Promise<SaveStagingResult> {
   const session = await requireSession();
   const union = await getStagingUnion(session.user.id, params.fileIds);
@@ -40,11 +42,10 @@ export async function saveStaging(params: { fileIds?: string[]; selectedIds?: st
     if (selected) return selected.has(r._stagingId);
     return true;
   });
-  const STRIP_KEYS = ["_stagingId", "_fileId", "_fileName", "_rowNumber", "_valid", "_error"];
   const rawRows: RawImportRow[] = target.map((r) => {
     const copy: Record<string, unknown> = { ...r };
     for (const k of STRIP_KEYS) delete copy[k];
-    return copy;
+    return copy as RawImportRow;
   });
   const fileIds = Array.from(new Set(union.map((r) => r._fileId)));
   const fileName = `staging-${fileIds.length}-files`;
