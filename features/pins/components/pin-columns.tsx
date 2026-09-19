@@ -72,19 +72,6 @@ function SortHeader({
   );
 }
 
-function Clipped({ text, lines = 2 }: { text: string; lines?: 1 | 2 }) {
-  const cls =
-    lines === 2
-      ? "line-clamp-2 max-w-56 whitespace-normal"
-      : "block max-w-44 truncate";
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className={cls}>{text}</span>} />
-      <TooltipContent className="max-w-80">{text}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 function formatMoney(amount: number, currency: string): string {
   const symbol = CURRENCY_SYMBOL[currency] ?? `${currency} `;
   return `${symbol}${amount.toLocaleString("en-US", {
@@ -373,44 +360,6 @@ export function createPinBoardColumns(
         </span>
       ),
       sortFn: sortFn_text,
-    },
-    {
-      id: "note",
-      accessorKey: "note",
-      header: "Catatan",
-      cell: ({ row }) =>
-        row.original.note ? (
-          <Clipped text={row.original.note} lines={1} />
-        ) : (
-          <span className="text-sm text-muted-foreground">-</span>
-        ),
-    },
-    {
-      id: "pinnedBy",
-      accessorKey: "pinnedBy",
-      header: "Pemin",
-      cell: ({ row }) => (
-        <div className="min-w-0">
-          <p className="block max-w-32 truncate text-sm font-medium">
-            {row.original.pinnedBy.name}
-          </p>
-          {row.original.pinnedBy.username ? (
-            <p className="block max-w-32 truncate text-xs text-muted-foreground">
-              @{row.original.pinnedBy.username}
-            </p>
-          ) : null}
-        </div>
-      ),
-    },
-    {
-      id: "pinnedAt",
-      accessorKey: "pinnedAt",
-      header: "Dipin pada",
-      cell: ({ row }) => (
-        <span className="block text-sm whitespace-nowrap tabular-nums">
-          {formatPinDate(row.original.pinnedAt)}
-        </span>
-      ),
     },
     withActionColumn<PinDTO>({
       header: "Aksi",

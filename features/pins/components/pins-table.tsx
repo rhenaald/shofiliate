@@ -92,6 +92,8 @@ interface PinsTableProps {
   onEditNote: (pin: PinDTO) => void;
   onUnpin: (pin: PinDTO) => void;
   onAddPin: () => void;
+  /** Buka Sheet detail pin saat body baris diklik. */
+  onRowOpen: (pin: PinDTO) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   /** Query + region aktif dari URL — untuk deskripsi empty state. */
@@ -113,6 +115,7 @@ export function PinsTable({
   onEditNote,
   onUnpin,
   onAddPin,
+  onRowOpen,
   onPageChange,
   onPageSizeChange,
   query,
@@ -298,6 +301,19 @@ export function PinsTable({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    // Klik pada elemen interaktif (link, tombol, checkbox)
+                    // ditangani elemen itu sendiri — bukan buka Sheet.
+                    const el = e.target as HTMLElement;
+                    if (
+                      el.closest(
+                        "a,button,input,select,textarea,[role='menu'],[role='menuitem']",
+                      )
+                    )
+                      return;
+                    onRowOpen(row.original);
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell

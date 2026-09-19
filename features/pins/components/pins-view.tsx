@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { toast } from "@/components/ui/toast";
 import { AddPinDialog } from "@/features/pins/components/add-pin-dialog";
+import { PinDetailSheet } from "@/features/pins/components/pin-detail-sheet";
 import { pinsHref } from "@/features/pins/components/pins-url";
 import { PinsTable } from "@/features/pins/components/pins-table";
 import { PinsToolbar } from "@/features/pins/components/pins-toolbar";
@@ -56,6 +57,7 @@ export function PinsView({ dtos, total, page, pageSize }: PinsViewProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [addOpen, setAddOpen] = React.useState(false);
+  const [detail, setDetail] = React.useState<PinDTO | null>(null);
   const [editing, setEditing] = React.useState<PinDTO | null>(null);
   const [unpinning, setUnpinning] = React.useState<PinDTO | null>(null);
 
@@ -127,12 +129,21 @@ export function PinsView({ dtos, total, page, pageSize }: PinsViewProps) {
         onEditNote={setEditing}
         onUnpin={setUnpinning}
         onAddPin={() => setAddOpen(true)}
+        onRowOpen={setDetail}
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         query={searchParams.get("q") ?? ""}
         region={searchParams.get("region") ?? "MY"}
       />
       <AddPinDialog open={addOpen} onOpenChange={setAddOpen} />
+      {detail ? (
+        <PinDetailSheet
+          pin={detail}
+          onClose={() => setDetail(null)}
+          onEditNote={setEditing}
+          onUnpin={setUnpinning}
+        />
+      ) : null}
       {editing ? (
         <EditNoteSheet pin={editing} onClose={() => setEditing(null)} />
       ) : null}
