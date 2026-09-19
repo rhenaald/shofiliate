@@ -2,7 +2,7 @@
 
 import "server-only";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import { requireSession } from "@/features/auth/data/session";
 import { parseImportRow } from "@/features/products/schemas";
@@ -276,6 +276,26 @@ export async function importProducts(params: {
     }
   }
 
+  // Move latest-pointer to this batch's snapshots (new + updated).
+  if (allSnapshotData.length > 0) {
+    const ids = allSnapshotData.map((s) => s.productId);
+    const fresh = await prisma.productSnapshot.findMany({
+      where: { productId: { in: ids }, batchId: batch.id },
+      select: { id: true, productId: true },
+    });
+    const PTR_CHUNK = 100;
+    for (let i = 0; i < fresh.length; i += PTR_CHUNK) {
+      await Promise.all(
+        fresh.slice(i, i + PTR_CHUNK).map((s) =>
+          prisma.product.update({
+            where: { id: s.productId },
+            data: { latestSnapshotId: s.id },
+          }),
+        )
+      );
+    }
+  }
+
   const imported = createdProducts.length;
   const updated = updateRows.length;
 
@@ -290,7 +310,15 @@ export async function importProducts(params: {
     },
   });
 
-  revalidatePath("/dashboard/catalog");
+  // MV refresh must run outside any transaction so readers keep old snapshot.
+  await prisma.$executeRawUnsafe(
+    `REFRESH MATERIALIZED VIEW CONCURRENTLY catalog_latest`
+  );
+
+  const touchedRegions = Array.from(new Set(validRows.map((r) => r.region)));
+  for (const region of touchedRegions) {
+    revalidateTag(`catalog-${region}`, "max");
+  }
   revalidatePath("/dashboard/products/import");
 
   return {
