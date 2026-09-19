@@ -45,7 +45,7 @@ export function useCompanionExtension() {
       }
 
       const { source, type, result, error, requestId, completed, total, percentage, currentProduct } = event.data;
-      if (source !== "shofiliate-companion-extension") {
+      if (source !== "shofiliate-companion-extension" && source !== "shofiliate-companion-background") {
         return;
       }
 
@@ -53,7 +53,7 @@ export function useCompanionExtension() {
         setIsExtensionInstalled(true);
       }
 
-      if (type === "ENRICH_PROGRESS" && requestId) {
+      if (type === "ENRICH_PROGRESS") {
         setProgress({
           completed: completed || 0,
           total: total || 0,
@@ -201,6 +201,26 @@ export function useCompanionExtension() {
     [isExtensionInstalled]
   );
 
+  const scrapeSingleProduct = React.useCallback(
+    async (item: { itemId: string; name: string; url: string; region: string }): Promise<RawImportRow> => {
+      const rows = await enrichRows(
+        [
+          {
+            product_id: item.itemId,
+            product_name: item.name,
+            product_url: item.url,
+          },
+        ],
+        item.region
+      );
+      if (!rows || rows.length === 0) {
+        throw new Error("Gagal mengambil data dari ekstensi Shopee Affiliate");
+      }
+      return rows[0];
+    },
+    [enrichRows]
+  );
+
   return {
     isExtensionInstalled,
     isEnriching,
@@ -209,5 +229,6 @@ export function useCompanionExtension() {
     setEnrichError,
     enrichRows,
     searchSingleProductByName,
+    scrapeSingleProduct,
   };
 }

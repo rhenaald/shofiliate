@@ -349,21 +349,32 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
   const enrichedRows = [];
 
   const sendProgress = (completed, currentName = "") => {
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 100;
+    const progressData = {
+      source: "shofiliate-companion-background",
+      type: "ENRICH_PROGRESS",
+      requestId,
+      completed,
+      total,
+      percentage,
+      currentProduct: currentName,
+    };
+
     if (tabId) {
-      try {
-        const percentage = total > 0 ? Math.round((completed / total) * 100) : 100;
-        chrome.tabs.sendMessage(tabId, {
-          source: "shofiliate-companion-background",
-          type: "ENRICH_PROGRESS",
-          requestId,
-          completed,
-          total,
-          percentage,
-          currentProduct: currentName,
-        });
-      } catch (err) {
-        // Tab mungkin tertutup atau reload
-      }
+      chrome.tabs.sendMessage(tabId, progressData).catch(() => {});
+    }
+
+    // Fallback broadcast ke tab Shofiliate lainnya
+    try {
+      chrome.tabs.query({ url: ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"] }, (tabs) => {
+        for (const t of tabs || []) {
+          if (t.id && t.id !== tabId) {
+            chrome.tabs.sendMessage(t.id, progressData).catch(() => {});
+          }
+        }
+      });
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -403,7 +414,7 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
       else if (rawUrl.includes(".co.th")) rowRegion = "TH";
       else if (rawUrl.includes(".vn")) rowRegion = "VN";
 
-      const tld = rowRegion === "ID" ? "co.id" : (rowRegion === "MY" ? "com.my" : "co.id");
+      const affDomain = REGION_AFFILIATE_DOMAINS[rowRegion] || "affiliate.shopee.co.id";
 
       // Jika tidak ada numeric ID, simpan baris apa adanya dan lanjut
       if (!itemId || !/^\d+$/.test(itemId)) {
@@ -414,7 +425,7 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
 
       sendProgress(i, `Mengambil data komisi & link ID: ${itemId}...`);
 
-      const targetOfferUrl = `https://affiliate.shopee.${tld}/offer/product_offer/${itemId}`;
+      const targetOfferUrl = `https://${affDomain}/offer/product_offer/${itemId}`;
 
       try {
         // Pastikan background tab masih aktif
@@ -862,9 +873,9 @@ async function runAutomateInPage(targetItemId) {
 
 // Format data hasil scrape menjadi payload lengkap untuk web app Shofiliate
 function formatProductResult(d, region = "ID") {
-  const tld = region === "ID" ? "co.id" : "com.my";
+  const mainDomain = REGION_MAIN_DOMAINS[region] || "shopee.co.id";
   const itemId = d.itemId || "";
-  const productUrl = itemId ? `https://shopee.${tld}/product/0/${itemId}` : "";
+  const productUrl = itemId ? `https://${mainDomain}/product/0/${itemId}` : "";
   const affLink = (d.affiliateLink && !d.affiliateLink.includes("/offer/product_offer/"))
     ? d.affiliateLink
     : "";
@@ -887,7 +898,16 @@ function formatProductResult(d, region = "ID") {
   const videoShopeeAmt = d.video?.shopeeAmount ?? 0;
   const videoEstAmt = d.video?.estimatedAmount ?? (videoXtraAmt + videoShopeeAmt);
 
-  const priceStr = d.price ? `Rp ${d.price.toLocaleString("id-ID")}` : (region === "ID" ? "Rp 0" : "RM 0");
+  const currencySymbols = {
+    MY: "RM",
+    SG: "S$",
+    ID: "Rp",
+    TH: "฿",
+    PH: "₱",
+    VN: "₫",
+  };
+  const sym = currencySymbols[region] || "Rp";
+  const priceStr = d.price ? `${sym} ${d.price.toLocaleString("id-ID")}` : `${sym} 0`;
 
   return {
     product_id: itemId,
@@ -996,7 +1016,6 @@ async function waitForTabReady(tabId, maxWaitMs = 4000) {
 // mengambil data & shortlink, lalu MENUTUPNYA KEMBALI secara otomatis!
 async function searchProductByName(query, region = "ID") {
   const domain = REGION_AFFILIATE_DOMAINS[region] || "affiliate.shopee.co.id";
-  const tld = region === "ID" ? "co.id" : "com.my";
   const trimmed = String(query).trim();
 
   // Deteksi Item ID
@@ -1025,7 +1044,7 @@ async function searchProductByName(query, region = "ID") {
       );
     }
 
-    const targetUrl = `https://affiliate.shopee.${tld}/offer/product_offer/${extractedItemId}`;
+    const targetUrl = `https://${domain}/offer/product_offer/${extractedItemId}`;
     const newTab = await chrome.tabs.create({
       url: targetUrl,
       active: false, // Berjalan di latar belakang tanpa mencuri fokus

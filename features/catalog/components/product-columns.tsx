@@ -11,7 +11,9 @@ import {
   ArrowUpDown,
   Copy,
   ExternalLink,
+  Loader2,
   Pin,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 
@@ -104,6 +106,8 @@ export function createProductColumns(
   view: CatalogView,
   opts: ProductColumnSort & ProductPinActions,
   onDeleteProduct?: (row: CatalogRow) => void,
+  onScrapeProduct?: (row: CatalogRow) => void,
+  scrapingProductId?: string | null,
 ): ColumnDef<DataTableFeatures, CatalogRow>[] {
   const header = (
     columnId: string,
@@ -251,6 +255,38 @@ export function createProductColumns(
       cell: ({ row }) => {
         const url = row.original.affiliateUrl;
         const hasUrl = !!url && url.trim().length > 0;
+        const isThisScraping = scrapingProductId === row.original.productId;
+
+        if (!hasUrl) {
+          return (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs font-medium text-primary hover:text-primary hover:bg-primary/10 border-primary/30"
+                    disabled={isThisScraping || !!scrapingProductId}
+                    aria-label="Cari link Shopee Affiliate"
+                    onClick={() => {
+                      onScrapeProduct?.(row.original);
+                    }}
+                  >
+                    {isThisScraping ? (
+                      <Loader2 className="size-3 animate-spin text-primary" />
+                    ) : (
+                      <Sparkles className="size-3 text-primary" />
+                    )}
+                    <span>{isThisScraping ? "Mencari..." : "Cari Link"}</span>
+                  </Button>
+                }
+              />
+              <TooltipContent>
+                Scrape dan buat link affiliate otomatis via ekstensi Shopee
+              </TooltipContent>
+            </Tooltip>
+          );
+        }
 
         return (
           <ButtonGroup>
@@ -425,6 +461,17 @@ export function createProductColumns(
             disabled: pinned,
             onSelect: () => opts.onPin(data.productId),
           },
+          ...(onScrapeProduct
+            ? [
+                {
+                  id: "scrape-link",
+                  label: data.affiliateUrl ? "Perbarui link affiliate" : "Cari link affiliate",
+                  icon: Sparkles,
+                  disabled: !!scrapingProductId,
+                  onSelect: () => onScrapeProduct(data),
+                },
+              ]
+            : []),
           {
             id: "fix-region",
             label: "Koreksi region",

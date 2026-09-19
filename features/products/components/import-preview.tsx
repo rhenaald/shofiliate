@@ -8,7 +8,6 @@ import {
   FileSpreadsheetIcon,
   Loader2Icon,
   SparklesIcon,
-  ZapIcon,
 } from "lucide-react";
 import * as React from "react";
 
@@ -57,6 +56,47 @@ export function ImportPreview({
   }, [rows]);
 
   const hasUnenriched = enrichedCount < totalRows;
+
+  const [singleScrapingIndex, setSingleScrapingIndex] = React.useState<number | null>(null);
+
+  const handleScrapeRow = async (index: number, row: RawImportRow) => {
+    try {
+      setSingleScrapingIndex(index);
+      const itemId = String(row.product_id || row.itemId || row.item_id || "");
+      const url = String(row.product_url || row.url || "");
+      let targetRegion: RegionCode = "MY";
+      if (url.includes(".com.my")) targetRegion = "MY";
+      else if (url.includes(".sg")) targetRegion = "SG";
+      else if (url.includes(".co.id")) targetRegion = "ID";
+      else if (url.includes(".co.th")) targetRegion = "TH";
+      else if (url.includes(".ph")) targetRegion = "PH";
+      else if (url.includes(".vn")) targetRegion = "VN";
+
+      const enriched = await enrichRows(
+        [
+          {
+            ...row,
+            product_id: itemId,
+            product_url: url,
+            product_name: row.product_name || "",
+          },
+        ],
+        targetRegion
+      );
+
+      if (enriched && enriched[0]) {
+        setRows((prev) => {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...enriched[0] };
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error("Gagal scrape row di preview:", err);
+    } finally {
+      setSingleScrapingIndex(null);
+    }
+  };
 
   const handleEnrichNow = async () => {
     try {
@@ -349,9 +389,27 @@ export function ImportPreview({
                           <span className="truncate">{String(affiliateLink).replace(/^https?:\/\//, "")}</span>
                         </a>
                       ) : (
-                        <span className="text-muted-foreground text-[11px] italic">
-                          Belum ada
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground text-[11px] italic">
+                            Belum ada
+                          </span>
+                          {isExtensionInstalled && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-1.5 text-[10px] gap-1 text-primary hover:bg-primary/10 border border-primary/20"
+                              disabled={singleScrapingIndex !== null || isEnriching}
+                              onClick={() => handleScrapeRow(idx, row)}
+                            >
+                              {singleScrapingIndex === idx ? (
+                                <Loader2Icon className="size-2.5 animate-spin" />
+                              ) : (
+                                <SparklesIcon className="size-2.5" />
+                              )}
+                              <span>Cari</span>
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="font-mono">

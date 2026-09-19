@@ -1,11 +1,5 @@
-import { Suspense } from "react";
-
-import { Skeleton } from "@/components/ui/skeleton";
 import { catalogParamsSchema } from "@/features/catalog/schemas";
-import {
-  CatalogProgress,
-  CatalogTableStream,
-} from "@/features/catalog/pages/catalog-results";
+import { CatalogTableStream } from "@/features/catalog/pages/catalog-results";
 
 interface CatalogRouteProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -29,9 +23,6 @@ export default async function CatalogRoute({ searchParams }: CatalogRouteProps) 
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold">Products</h1>
-          <Suspense fallback={<Skeleton className="h-5 w-40" />}>
-            <CatalogProgress />
-          </Suspense>
         </div>
       </div>
       <CatalogTableStream params={params} />

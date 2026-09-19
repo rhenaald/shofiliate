@@ -2,7 +2,6 @@ import { Suspense } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProductsView } from "@/features/catalog/components/products-view";
-import { getTodayProgress } from "@/features/catalog/data/get-today-progress";
 import { listProducts } from "@/features/catalog/data/list-products";
 import { getPinnedProductIds } from "@/features/pins/data/get-pinned-product-ids";
 import type { CatalogParams } from "@/features/catalog/schemas";
@@ -58,18 +57,5 @@ async function CatalogTableInner({ params }: { params: CatalogParams }) {
         pinnedProductIds={pinnedProductIds}
       />
     </div>
-  );
-}
-
-export async function CatalogProgress() {
-  const progress = await getTodayProgress();
-  const remaining = Math.max(progress.target - progress.count, 0);
-  return (
-    <p className="text-sm font-semibold tabular-nums">
-      {progress.count}/{progress.target} hari ini
-      <span className="font-normal text-muted-foreground">
-        {remaining > 0 ? ` · sisa ${remaining}` : " · target tercapai"}
-      </span>
-    </p>
   );
 }
