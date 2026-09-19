@@ -71,7 +71,18 @@ export function ImportPageComposition() {
     setError(null);
   };
 
-  if (step === "upload") return <ImportUploader onFileLoaded={handleFileLoaded} isLoading={isSaving} />;
+  if (step === "upload")
+    return (
+      <div className="space-y-4">
+        {error && (
+          <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600 dark:text-rose-400">
+            <span className="font-semibold">Gagal Import: </span>
+            <span>{error}</span>
+          </div>
+        )}
+        <ImportUploader onFileLoaded={handleFileLoaded} isLoading={isSaving} />
+      </div>
+    );
   if (step === "staging")
     return (
       <div className="space-y-4">
