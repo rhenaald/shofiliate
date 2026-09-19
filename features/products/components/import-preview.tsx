@@ -449,7 +449,12 @@ export function ImportPreview({
             <TableBody>
               {displayRows.map(({ row, originalIdx }) => {
                 const productUrl = String(row.product_url ?? row.url ?? "");
-                const affiliateLink = row.affiliate_link || row.affiliate_url;
+                const itemId = String(row.product_id ?? row.itemId ?? row.item_id ?? "");
+                const rawAffLink = row.affiliate_link || row.affiliate_url;
+                const fallbackUniversal = itemId
+                  ? `https://shopee.co.id/universal-link?redir=${encodeURIComponent(`https://shopee.co.id/product/0/${itemId}`)}&utm_source=an_shofiliate&an_redir=1`
+                  : (productUrl || "");
+                const affiliateLink = rawAffLink || fallbackUniversal;
                 const rate = row.commission_live_rate || row.commission_rate;
                 const amount = row.commission_live_amount || row.commission_amount;
                 const hasXtra = Boolean(row.has_komisi_xtra || row.komisi_xtra_rate);
@@ -571,18 +576,37 @@ export function ImportPreview({
                     </TableCell>
 
                     {/* Link Affiliate */}
-                    <TableCell className="max-w-[160px]">
+                    <TableCell className="max-w-[170px]">
                       {affiliateLink ? (
-                        <a
-                          href={String(affiliateLink)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline truncate max-w-full font-medium"
-                          title={String(affiliateLink)}
-                        >
-                          <ExternalLinkIcon className="size-3 shrink-0" />
-                          <span className="truncate">{String(affiliateLink).replace(/^https?:\/\//, "")}</span>
-                        </a>
+                        <div className="flex items-center gap-1.5 max-w-full">
+                          <a
+                            href={String(affiliateLink)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline truncate max-w-full font-medium"
+                            title={String(affiliateLink)}
+                          >
+                            <ExternalLinkIcon className="size-3 shrink-0" />
+                            <span className="truncate">{String(affiliateLink).replace(/^https?:\/\//, "")}</span>
+                          </a>
+                          {!rawAffLink && isExtensionInstalled && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-1 text-[9px] gap-0.5 text-primary hover:bg-primary/10 border border-primary/20 shrink-0"
+                              disabled={singleScrapingIndex !== null || isEnriching}
+                              onClick={() => handleScrapeRow(originalIdx, row)}
+                              title="Ambil link pendek resmi s.shopee.co.id"
+                            >
+                              {singleScrapingIndex === originalIdx ? (
+                                <Loader2Icon className="size-2.5 animate-spin" />
+                              ) : (
+                                <SparklesIcon className="size-2.5" />
+                              )}
+                              <span>Cari</span>
+                            </Button>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex items-center gap-1.5">
                           <span className="text-muted-foreground text-[11px] italic">
