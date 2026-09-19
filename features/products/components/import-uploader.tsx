@@ -17,7 +17,7 @@ import { useCompanionExtension } from "@/features/products/hooks/use-companion-e
 import type { RawImportRow, RegionCode } from "@/features/products/types";
 
 interface ImportUploaderProps {
-  onFileLoaded: (fileName: string, rows: RawImportRow[]) => void;
+  onFileLoaded: (fileName: string, rows: RawImportRow[], warning?: string) => void;
   isLoading?: boolean;
 }
 
@@ -113,17 +113,27 @@ export function ImportUploader({
           return;
         } catch (enrichErr: unknown) {
           console.warn("Enrichment gagal, melanjutkan dengan data mentah:", enrichErr);
-          setErrorMessage(
+          const msg =
             enrichErr instanceof Error
               ? `Auto-Enrich gagal: ${enrichErr.message}`
-              : "Auto-Enrich gagal menghubungi Shopee Affiliate."
+              : "Auto-Enrich gagal menghubungi Shopee Affiliate.";
+          setErrorMessage(msg);
+          onFileLoaded(
+            file.name,
+            parsedRows,
+            `${msg}. Pastikan tab Shopee Affiliate sudah dibuka dan login, lalu klik tombol "Lengkapi Komisi & Link" di bawah.`
           );
-          onFileLoaded(file.name, parsedRows);
           return;
         }
       }
 
-      onFileLoaded(file.name, parsedRows);
+      onFileLoaded(
+        file.name,
+        parsedRows,
+        !isExtensionInstalled
+          ? "Ekstensi Shofiliate Companion belum terdeteksi. Silakan reload ekstensi di chrome://extensions/ dan pastikan sudah login di Shopee Affiliate untuk melengkapi komisi dan link affiliate."
+          : undefined
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal membaca atau memproses file.";
       setErrorMessage(`Error: ${msg}`);

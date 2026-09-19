@@ -19,10 +19,12 @@ export function ImportPageComposition() {
   const [result, setResult] = React.useState<ImportBatchResult | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = React.useState<string | null>(null);
 
-  const handleFileLoaded = (name: string, loadedRows: RawImportRow[]) => {
+  const handleFileLoaded = (name: string, loadedRows: RawImportRow[], warning?: string) => {
     setFileName(name);
     setRows(loadedRows);
+    setWarningMessage(warning || null);
     setGeneralError(null);
     setStep("preview");
   };
@@ -87,6 +89,7 @@ export function ImportPageComposition() {
           onConfirm={handleConfirmImport}
           onCancel={handleReset}
           isLoading={isLoading}
+          warningMessage={warningMessage}
         />
       )}
 

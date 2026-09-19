@@ -31,6 +31,7 @@ interface ImportPreviewProps {
   onConfirm: (rowsToConfirm: RawImportRow[]) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
+  warningMessage?: string | null;
 }
 
 function formatCommissionAmt(val: unknown, row: RawImportRow): string {
@@ -64,6 +65,7 @@ export function ImportPreview({
   onConfirm,
   onCancel,
   isLoading,
+  warningMessage,
 }: ImportPreviewProps) {
   const [rows, setRows] = React.useState<RawImportRow[]>(initialRows);
   const totalRows = rows.length;
@@ -77,24 +79,39 @@ export function ImportPreview({
     enrichError,
   } = useCompanionExtension();
 
-  // Hitung berapa produk yang sudah memiliki link affiliate & komisi
+  // Hitung berapa produk yang benar-benar sudah memiliki link affiliate resmi dan komisi
   const enrichedCount = React.useMemo(() => {
-    return rows.filter((r) => !!(r.affiliate_link || r.affiliate_url)).length;
+    return rows.filter((r) => {
+      const link = String(r.affiliate_link || r.affiliate_url || "").trim();
+      const isRealAffLink =
+        link.includes("s.shopee.") ||
+        link.includes("shope.ee") ||
+        link.includes("utm_source=an_");
+      const hasComm = Boolean(
+        r.commission_rate ||
+        r.commission_live_rate ||
+        r.commission_amount ||
+        r.commission_live_amount
+      );
+      return isRealAffLink && hasComm;
+    }).length;
   }, [rows]);
 
   const hasUnenriched = enrichedCount < totalRows;
 
   const [singleScrapingIndex, setSingleScrapingIndex] = React.useState<number | null>(null);
+  const [previewError, setPreviewError] = React.useState<string | null>(null);
 
   const handleScrapeRow = async (index: number, row: RawImportRow) => {
     try {
       setSingleScrapingIndex(index);
+      setPreviewError(null);
       const itemId = String(row.product_id || row.itemId || row.item_id || "");
       const url = String(row.product_url || row.url || "");
-      let targetRegion: RegionCode = "MY";
-      if (url.includes(".com.my")) targetRegion = "MY";
+      let targetRegion: RegionCode = "ID";
+      if (url.includes(".co.id")) targetRegion = "ID";
+      else if (url.includes(".com.my")) targetRegion = "MY";
       else if (url.includes(".sg")) targetRegion = "SG";
-      else if (url.includes(".co.id")) targetRegion = "ID";
       else if (url.includes(".co.th")) targetRegion = "TH";
       else if (url.includes(".ph")) targetRegion = "PH";
       else if (url.includes(".vn")) targetRegion = "VN";
@@ -118,8 +135,9 @@ export function ImportPreview({
           return updated;
         });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Gagal scrape row di preview:", err);
+      setPreviewError(err instanceof Error ? err.message : "Gagal mengambil data produk ini.");
     } finally {
       setSingleScrapingIndex(null);
     }
@@ -127,21 +145,23 @@ export function ImportPreview({
 
   const handleEnrichNow = async () => {
     try {
-      // Deteksi region dari data URL produk (default ke MY jika tidak ada)
-      let targetRegion: RegionCode = "MY";
+      setPreviewError(null);
+      // Deteksi region dari data URL produk (default ke ID jika tidak ada)
+      let targetRegion: RegionCode = "ID";
       for (const r of rows) {
         const url = String(r.product_url || r.url || "").toLowerCase();
+        if (url.includes(".co.id")) { targetRegion = "ID"; break; }
         if (url.includes(".com.my")) { targetRegion = "MY"; break; }
         if (url.includes(".sg")) { targetRegion = "SG"; break; }
-        if (url.includes(".co.id")) { targetRegion = "ID"; break; }
         if (url.includes(".co.th")) { targetRegion = "TH"; break; }
         if (url.includes(".ph")) { targetRegion = "PH"; break; }
         if (url.includes(".vn")) { targetRegion = "VN"; break; }
       }
       const result = await enrichRows(rows, targetRegion);
       setRows(result);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Gagal enrich di preview:", err);
+      setPreviewError(err instanceof Error ? err.message : "Gagal melengkapi data dari Shopee Affiliate.");
     }
   };
 
@@ -292,6 +312,32 @@ export function ImportPreview({
           </Button>
         </div>
       </div>
+
+      {/* Alert Error / Warning */}
+      {previewError && (
+        <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-600 dark:text-rose-400">
+          <AlertCircleIcon className="size-4 shrink-0" />
+          <span>{previewError}</span>
+        </div>
+      )}
+
+      {warningMessage && !previewError && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-700 dark:text-amber-400">
+          <AlertCircleIcon className="size-4 shrink-0" />
+          <span>{warningMessage}</span>
+        </div>
+      )}
+
+      {!isExtensionInstalled && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-foreground">
+          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <SparklesIcon className="size-4 shrink-0" />
+            <span>
+              <strong>Ekstensi Shofiliate Companion Belum Terdeteksi:</strong> Muat ulang ekstensi di <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-[11px]">chrome://extensions/</code> lalu refresh tab ini untuk mengaktifkan fitur otomatis melengkapi komisi dan link affiliate.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Enrichment Progress if running in preview */}
       {isEnriching && progress && (
