@@ -12,6 +12,13 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const PINS_PATH = "/dashboard/products/pins";
+const CATALOG_PATH = "/dashboard/catalog";
+
+function revalidatePinRoutes(): void {
+  revalidatePath(PINS_PATH);
+  // Indikator pinned di tabel katalog ikut segar.
+  revalidatePath(CATALOG_PATH);
+}
 
 // Skema lokal: unpin tidak butuh form (tanpa RHF di MOD-05), jadi tidak
 // ditaruh di schemas.ts bersama skema ber-form.
@@ -94,7 +101,7 @@ export async function togglePin(input: unknown): Promise<PinDTO> {
     return created;
   });
 
-  revalidatePath(PINS_PATH);
+  revalidatePinRoutes();
   return toPinDTO(pin);
 }
 
@@ -124,7 +131,7 @@ export async function unpin(
     data: { unpinnedAt: new Date() },
   });
 
-  revalidatePath(PINS_PATH);
+  revalidatePinRoutes();
   return {
     pinId: updated.id,
     // Baru di-set di atas; non-null assertion aman di sini.

@@ -22,9 +22,10 @@ interface ProductsViewProps {
   page: number;
   pageSize: number;
   view: CatalogView;
+  pinnedProductIds: string[];
 }
 
-export function ProductsView({ dtos, total, page, pageSize, view }: ProductsViewProps) {
+export function ProductsView({ dtos, total, page, pageSize, view, pinnedProductIds }: ProductsViewProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -102,6 +103,7 @@ export function ProductsView({ dtos, total, page, pageSize, view }: ProductsView
         view={view}
         sortId={sortId}
         sortDir={sortDir}
+        pinnedProductIds={pinnedProductIds}
         onSortChange={handleSortChange}
         onSelectDirection={handleSortDirection}
         onClearSort={handleClearSort}

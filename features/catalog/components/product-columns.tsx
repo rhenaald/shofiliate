@@ -90,9 +90,18 @@ export interface ProductColumnSort {
   onSort: (columnId: string) => void;
 }
 
+export interface ProductPinActions {
+  /** ID produk yang sedang aktif di-pin (indikator terisi). */
+  pinnedIds: Set<string>;
+  /** Pin tanpa note; tanpa-op bila sudah pinned (server idempoten). */
+  onPin: (productId: string) => void;
+  /** Kunci tombol saat mutasi berjalan (anti double-click). */
+  pinPending: boolean;
+}
+
 export function createProductColumns(
   view: CatalogView,
-  opts: ProductColumnSort,
+  opts: ProductColumnSort & ProductPinActions,
 ): ColumnDef<DataTableFeatures, CatalogRow>[] {
   const header = (
     columnId: string,
@@ -298,16 +307,35 @@ export function createProductColumns(
       id: "pin",
       header: () => <span className="sr-only">Pin</span>,
       enableSorting: false,
-      cell: () => (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Pin produk"
-          onClick={() => toast.add({ title: "Pin — coming in SH-9" })}
-        >
-          <Pin className="size-3.5" />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const pinned = opts.pinnedIds.has(row.original.productId);
+        return (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={pinned ? "Sudah di-pin" : "Pin produk"}
+                  disabled={pinned || opts.pinPending}
+                  onClick={() => opts.onPin(row.original.productId)}
+                >
+                  <Pin
+                    className={
+                      pinned ? "size-3.5 fill-current" : "size-3.5"
+                    }
+                  />
+                </Button>
+              }
+            />
+            <TooltipContent>
+              {pinned
+                ? "Sudah di-pin — kelola di halaman Pins"
+                : "Pin ke board bersama"}
+            </TooltipContent>
+          </Tooltip>
+        );
+      },
     },
     {
       id: "region",
@@ -376,29 +404,33 @@ export function createProductColumns(
       sortFn: sortFn_text,
     },
     withActionColumn<CatalogRow>({
-      getItems: (data) => [
-        {
-          id: "open",
-          label: "Lihat di Shopee",
-          icon: ExternalLink,
-          onSelect: () => {
-            if (data.url)
-              window.open(data.url, "_blank", "noopener,noreferrer");
+      getItems: (data) => {
+        const pinned = opts.pinnedIds.has(data.productId);
+        return [
+          {
+            id: "open",
+            label: "Lihat di Shopee",
+            icon: ExternalLink,
+            onSelect: () => {
+              if (data.url)
+                window.open(data.url, "_blank", "noopener,noreferrer");
+            },
           },
-        },
-        {
-          id: "pin",
-          label: "Pin",
-          icon: Pin,
-          onSelect: () => toast.add({ title: "Pin — coming in SH-9" }),
-        },
-        {
-          id: "fix-region",
-          label: "Koreksi region",
-          onSelect: () =>
-            toast.add({ title: "Koreksi region — coming in SH-8" }),
-        },
-      ],
+          {
+            id: "pin",
+            label: pinned ? "Sudah di-pin" : "Pin",
+            icon: Pin,
+            disabled: pinned,
+            onSelect: () => opts.onPin(data.productId),
+          },
+          {
+            id: "fix-region",
+            label: "Koreksi region",
+            onSelect: () =>
+              toast.add({ title: "Koreksi region — coming in SH-8" }),
+          },
+        ];
+      },
     }),
   ];
 }

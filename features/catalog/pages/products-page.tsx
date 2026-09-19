@@ -26,9 +26,10 @@ interface ProductsPageProps {
   params: CatalogParams;
   result: ListProductsResult;
   progress: { count: number; target: number };
+  pinnedProductIds: string[];
 }
 
-export function ProductsPage({ params, result, progress }: ProductsPageProps) {
+export function ProductsPage({ params, result, progress, pinnedProductIds }: ProductsPageProps) {
   const remaining = Math.max(progress.target - progress.count, 0);
   return (
     <div className="space-y-4 p-4">
@@ -76,6 +77,7 @@ export function ProductsPage({ params, result, progress }: ProductsPageProps) {
           page={result.page}
           pageSize={result.pageSize}
           view={params.view}
+          pinnedProductIds={pinnedProductIds}
         />
       </Suspense>
     </div>

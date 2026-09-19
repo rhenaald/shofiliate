@@ -55,6 +55,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toast";
+import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import {
   SORTABLE_COLUMNS,
   createProductColumns,
@@ -65,6 +67,7 @@ import {
   type CatalogView,
 } from "@/features/catalog/types";
 import type { CatalogSortId } from "@/features/catalog/schemas";
+import { togglePin } from "@/features/pins/actions/toggle-pin";
 
 const features = tableFeatures({
   columnFilteringFeature,
@@ -88,6 +91,7 @@ interface ProductTableProps {
   view: CatalogView;
   sortId: CatalogSortId | null;
   sortDir: "asc" | "desc";
+  pinnedProductIds: string[];
   onSortChange: (columnId: string) => void;
   onSelectDirection: (dir: "asc" | "desc") => void;
   onClearSort: () => void;
@@ -105,6 +109,7 @@ export function ProductTable({
   view,
   sortId,
   sortDir,
+  pinnedProductIds,
   onSortChange,
   onSelectDirection,
   onClearSort,
@@ -113,9 +118,49 @@ export function ProductTable({
   onClearFilters,
   isLoading = false,
 }: ProductTableProps) {
+  const router = useRouter();
+  const pinnedIds = React.useMemo(
+    () => new Set(pinnedProductIds),
+    [pinnedProductIds],
+  );
+
+  const pinMutation = useMutation({
+    mutationKey: ["catalog", "pin"],
+    mutationFn: (productId: string) => togglePin({ productId }),
+  });
+
+  const handlePin = React.useCallback(
+    (productId: string) => {
+      if (pinnedIds.has(productId) || pinMutation.isPending) return;
+      pinMutation.mutate(productId, {
+        onSuccess: () => {
+          toast.add({ title: "Produk di-pin" });
+          router.refresh();
+        },
+        onError: (error) => {
+          toast.add({
+            title:
+              error instanceof Error ? error.message : "Gagal mem-pin produk",
+          });
+        },
+      });
+    },
+    [pinMutation, pinnedIds, router],
+  );
+
+  const pinPending = pinMutation.isPending;
+
   const columns = React.useMemo(
-    () => createProductColumns(view, { sortId, sortDir, onSort: onSortChange }),
-    [view, sortId, sortDir, onSortChange],
+    () =>
+      createProductColumns(view, {
+        sortId,
+        sortDir,
+        onSort: onSortChange,
+        pinnedIds,
+        onPin: handlePin,
+        pinPending,
+      }),
+    [view, sortId, sortDir, onSortChange, pinnedIds, handlePin, pinPending],
   );
   // Urutan baris adalah otoritas server (sort per view / ?sort&dir).
   // Sorting interaktif lokal dimatikan agar tidak menyesatkan (hanya 1 halaman terlihat).
@@ -193,13 +238,46 @@ export function ProductTable({
     setJumpKey(null);
   }
 
+  const bulkPinMutation = useMutation({
+    mutationKey: ["catalog", "bulk-pin"],
+    mutationFn: async (productIds: string[]) => {
+      await Promise.all(productIds.map((id) => togglePin({ productId: id })));
+      return productIds.length;
+    },
+  });
+
   const bulkActions = React.useMemo(
     () => [
       {
         id: "pin",
         label: "Pin",
         icon: Pin,
-        onClick: () => toast.add({ title: "Pin — coming in SH-9" }),
+        onClick: () => {
+          if (bulkPinMutation.isPending) return;
+          const ids = table
+            .getFilteredSelectedRowModel()
+            .rows.map((r) => r.original.productId)
+            .filter((id) => !pinnedIds.has(id));
+          if (ids.length === 0) {
+            toast.add({ title: "Semua produk terpilih sudah di-pin" });
+            return;
+          }
+          bulkPinMutation.mutate(ids, {
+            onSuccess: (count) => {
+              toast.add({ title: `${count} produk di-pin` });
+              table.resetRowSelection();
+              router.refresh();
+            },
+            onError: (error) => {
+              toast.add({
+                title:
+                  error instanceof Error
+                    ? error.message
+                    : "Gagal mem-pin produk",
+              });
+            },
+          });
+        },
       },
       {
         id: "copy-link",
@@ -214,7 +292,7 @@ export function ProductTable({
         onClick: () => toast.add({ title: "Export — coming in SH-6" }),
       },
     ],
-    [],
+    [table, pinnedIds, bulkPinMutation, router],
   );
 
   const activeColumnId =
