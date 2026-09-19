@@ -361,8 +361,8 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
   };
 }
 
-// Tunggu hingga tab memuat item spesifik (cek URL dan readyState)
-async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 6000) {
+// Tunggu hingga tab memuat item spesifik (cek URL dan readyState secara cepat 80ms)
+async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 5000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     try {
@@ -370,7 +370,7 @@ async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 6000) {
         target: { tabId },
         func: (id) => {
           const ready = document.readyState === "complete" || document.readyState === "interactive";
-          const match = window.location.pathname.includes(id) || window.location.href.includes(id);
+          const match = window.location.pathname.includes(String(id)) || window.location.href.includes(String(id));
           return ready && match;
         },
         args: [expectedItemId],
@@ -381,9 +381,84 @@ async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 6000) {
     } catch (e) {
       // Tab mungkin sedang proses navigasi
     }
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 80));
   }
   return false;
+}
+
+// Multi-Worker Reusable Tab Pool: Menjalankan 2-3 tab latar belakang paralel yang didaur ulang
+async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
+  if (!items || items.length === 0) return {};
+
+  const concurrency = items.length >= 10 ? 3 : Math.min(2, items.length);
+  const resultsMap = {};
+  const queue = [...items];
+
+  // Buka tab pekerja (active: false) di awal tanpa mengganggu layar user
+  const workerTabs = [];
+  try {
+    for (let i = 0; i < concurrency; i++) {
+      const tab = await chrome.tabs.create({
+        url: "about:blank",
+        active: false,
+      });
+      workerTabs.push(tab);
+    }
+
+    // Tunggu tab pekerja selesai inisialisasi
+    await new Promise((r) => setTimeout(r, 250));
+
+    // Jalankan setiap worker untuk mengambil tugas dari antrean secara paralel
+    const workers = workerTabs.map(async (tab, workerIdx) => {
+      while (queue.length > 0) {
+        const it = queue.shift();
+        if (!it) break;
+
+        const targetUrl = `https://${domain}/offer/product_offer/${it.itemId}`;
+        try {
+          if (onProgressItem) {
+            onProgressItem(it, `Worker ${workerIdx + 1}: ${it.row?.product_name || it.itemId}`);
+          }
+
+          // Arahkan tab yang sama ke URL produk berikutnya (tanpa buka-tutup tab!)
+          await chrome.tabs.update(tab.id, { url: targetUrl });
+
+          // Tunggu navigasi halaman ke item ID tersebut selesai
+          await waitForTabToLoadItem(tab.id, it.itemId, 4500);
+
+          // Eksekusi skrip automasi native Shopee
+          const res = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: runAutomateInPage,
+            args: [it.itemId],
+          });
+
+          const data = res?.[0]?.result;
+          if (data && (data.productName || data.itemId || data.affiliateLink)) {
+            resultsMap[it.itemId] = data;
+          }
+        } catch (err) {
+          console.warn(`[Shofiliate Worker ${workerIdx + 1}] Gagal scrape ${it.itemId}:`, err);
+        }
+
+        // Jeda kecil 120ms antar produk agar aman dan ramah server Shopee
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    });
+
+    await Promise.all(workers);
+  } finally {
+    // Tutup seluruh tab pekerja sekaligus saat selesai
+    for (const tab of workerTabs) {
+      if (tab?.id) {
+        try {
+          await chrome.tabs.remove(tab.id);
+        } catch (e) {}
+      }
+    }
+  }
+
+  return resultsMap;
 }
 
 // Menjalankan batch GraphQL API langsung di dalam konteks tab Shopee Affiliate aktif
@@ -857,123 +932,85 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
       enrichedRows[it.idx] = it.row;
     });
 
-    // 4. Proses valid items dalam batch (CHUNK_SIZE = 5 untuk kecepatan maksimal & aman dari rate limit)
-    const CHUNK_SIZE = 5;
-    let processedCount = invalidItems.length;
+    // 4. Kumpulkan item yang membutuhkan automasi
+    const itemsNeedingAutomation = [];
 
-    for (let c = 0; c < validItems.length; c += CHUNK_SIZE) {
-      const chunk = validItems.slice(c, c + CHUNK_SIZE);
-      sendProgress(processedCount, `Memproses data Shopee: ${chunk[0].row.product_name || chunk[0].itemId}...`);
+    // Coba batch API terlebih dahulu jika tab Shopee tersedia
+    if (shopeeTab?.id) {
+      const CHUNK_SIZE = 5;
+      for (let c = 0; c < validItems.length; c += CHUNK_SIZE) {
+        const chunk = validItems.slice(c, c + CHUNK_SIZE);
+        sendProgress(invalidItems.length + c, `Memeriksa API Shopee: ${chunk[0].row.product_name || chunk[0].itemId}...`);
 
-      // Panggil GraphQL internal API langsung di dalam tab aktif
-      let batchResult = null;
-      try {
-        batchResult = await executeBatchDirectInTab(shopeeTab.id, affDomain, chunk);
-      } catch (e) {
-        console.warn("[Shofiliate] batch direct in tab error:", e);
-      }
-
-      if (batchResult?.error === "NOT_LOGGED_IN") {
-        const auth = await checkShopeeAuth(firstRegion);
-        if (!auth?.authenticated) {
-          throw new Error(`Akun Shopee Affiliate Anda belum login di portal ${affDomain}. Silakan login terlebih dahulu di tab browser Chrome.`);
+        let batchResult = null;
+        try {
+          batchResult = await executeBatchDirectInTab(shopeeTab.id, affDomain, chunk);
+        } catch (e) {
+          console.warn("[Shofiliate] batch direct in tab error:", e);
         }
-      }
 
-      if (batchResult?.success && Array.isArray(batchResult.items)) {
-        const resultMap = {};
-        batchResult.items.forEach((res) => {
-          resultMap[res.itemId] = res;
-        });
-
-        for (const it of chunk) {
-          const res = resultMap[it.itemId];
-          let shortLink = res?.shortLink || null;
-          let node = res?.node || null;
-
-          // Cek apakah item sudah memiliki shortlink Shopee asli (s.shopee. / shope.ee) dan data komisi
-          const hasRealLink =
-            shortLink &&
-            (shortLink.includes("s.shopee.") || shortLink.includes("shope.ee"));
-          const hasCommission =
-            node &&
-            (node.commissionRate !== undefined && node.commissionRate !== null);
-
-          // Jika API GraphQL tidak menghasilkan shortlink atau komisi, panggil fallback automasi DOM Shopee
-          if (!hasRealLink || !hasCommission) {
-            try {
-              sendProgress(processedCount, `Mengambil link & komisi Shopee: ${it.row.product_name || it.itemId}...`);
-              const autoResult = await searchProductByName(it.itemId, it.region);
-              if (autoResult) {
-                if (!hasRealLink && autoResult.affiliate_link && !autoResult.affiliate_link.includes("utm_source")) {
-                  shortLink = autoResult.affiliate_link;
-                }
-                if (!hasCommission) {
-                  node = {
-                    itemId: it.itemId,
-                    productName: autoResult.product_name,
-                    ratingStar: autoResult.rating,
-                    commissionRate: autoResult.commission_rate,
-                    minCommission: autoResult.commission_amount,
-                    maxCommission: autoResult.commission_amount,
-                    price: autoResult.gmv_30d ? parseFloat(String(autoResult.gmv_30d).replace(/[^\d.]/g, "")) : 0,
-                    offerLink: shortLink,
-                    liveCommissionRate: autoResult.commission_live_rate,
-                    liveCommissionAmount: autoResult.commission_live_amount,
-                    socialCommissionRate: autoResult.commission_social_rate,
-                    socialCommissionAmount: autoResult.commission_social_amount,
-                    videoCommissionRate: autoResult.commission_video_rate,
-                    videoCommissionAmount: autoResult.commission_video_amount,
-                    hasKomisiXtra: autoResult.has_komisi_xtra,
-                    extraCommissionRate: autoResult.komisi_xtra_rate,
-                    extraCommissionAmount: autoResult.komisi_xtra_amount,
-                  };
-                }
-              }
-            } catch (autoErr) {
-              console.warn(`[Shofiliate] Fallback automation failed for ${it.itemId}:`, autoErr);
-            }
+        if (batchResult?.error === "NOT_LOGGED_IN") {
+          const auth = await checkShopeeAuth(firstRegion);
+          if (!auth?.authenticated) {
+            throw new Error(`Akun Shopee Affiliate Anda belum login di portal ${affDomain}. Silakan login terlebih dahulu di tab browser Chrome.`);
           }
-
-          const merged = mergeItemData(
-            it.row,
-            it.itemId,
-            shortLink,
-            node,
-            it.url,
-            it.region
-          );
-          enrichedRows[it.idx] = merged;
-          processedCount++;
-          sendProgress(processedCount, it.row.product_name || it.itemId);
         }
-      } else {
-        // Fallback jika direct API gagal total:
-        for (const it of chunk) {
-          try {
-            sendProgress(processedCount, `Automasi Shopee: ${it.row.product_name || it.itemId}...`);
-            const autoResult = await searchProductByName(it.itemId, it.region);
-            if (autoResult) {
-              enrichedRows[it.idx] = {
-                ...it.row,
-                ...autoResult,
-              };
+
+        if (batchResult?.success && Array.isArray(batchResult.items)) {
+          const resultMap = {};
+          batchResult.items.forEach((res) => {
+            resultMap[res.itemId] = res;
+          });
+
+          chunk.forEach((it) => {
+            const res = resultMap[it.itemId];
+            const shortLink = res?.shortLink || null;
+            const node = res?.node || null;
+            const hasRealLink = shortLink && (shortLink.includes("s.shopee.") || shortLink.includes("shope.ee"));
+            const hasCommission = node && (node.commissionRate !== undefined && node.commissionRate !== null);
+
+            if (hasRealLink && hasCommission) {
+              const merged = mergeItemData(it.row, it.itemId, shortLink, node, it.url, it.region);
+              enrichedRows[it.idx] = merged;
+              processedCount++;
+              sendProgress(processedCount, it.row.product_name || it.itemId);
             } else {
-              enrichedRows[it.idx] = it.row;
+              itemsNeedingAutomation.push(it);
             }
-          } catch (e) {
-            console.warn(`[Shofiliate] Fallback failed for ${it.itemId}:`, e);
-            enrichedRows[it.idx] = it.row;
-          }
-          processedCount++;
-          sendProgress(processedCount, it.row.product_name || it.itemId);
+          });
+        } else {
+          chunk.forEach((it) => itemsNeedingAutomation.push(it));
         }
       }
+    } else {
+      itemsNeedingAutomation.push(...validItems);
+    }
 
-      // Jeda kecil 200ms antar batch (sangat aman untuk anti-spam Shopee)
-      if (c + CHUNK_SIZE < validItems.length) {
-        await new Promise((r) => setTimeout(r, 200));
-      }
+    // 5. Multi-Worker Reusable Tab Pool: Menjalankan tab paralel yang didaur ulang untuk sisa item
+    if (itemsNeedingAutomation.length > 0) {
+      sendProgress(processedCount, `Menjalankan Worker Paralel (${itemsNeedingAutomation.length} produk)...`);
+
+      const automatedResults = await enrichItemsWithWorkerPool(
+        itemsNeedingAutomation,
+        affDomain,
+        (it, statusText) => {
+          processedCount++;
+          sendProgress(processedCount, statusText);
+        }
+      );
+
+      itemsNeedingAutomation.forEach((it) => {
+        const autoData = automatedResults[it.itemId];
+        if (autoData) {
+          const formatted = formatProductResult(autoData, it.region);
+          enrichedRows[it.idx] = {
+            ...it.row,
+            ...formatted,
+          };
+        } else {
+          enrichedRows[it.idx] = it.row;
+        }
+      });
     }
   } finally {
     // Tutup tab sementara jika kita yang membuatnya
@@ -1122,8 +1159,8 @@ async function runAutomateInPage(targetItemId) {
     );
   };
 
-  // 0.1 Tunggu SPA Shopee merender konten tabel / tombol jika tab baru dimuat (maks 6 detik)
-  for (let attempt = 0; attempt < 30; attempt++) {
+  // 0.1 Tunggu SPA Shopee merender konten tabel / tombol jika tab baru dimuat (maks 4 detik)
+  for (let attempt = 0; attempt < 45; attempt++) {
     const hasShopeeNativeButton = Array.from(
       document.querySelectorAll("button, [role='button'], a.ant-btn, a")
     ).some((el) => {
@@ -1150,11 +1187,10 @@ async function runAutomateInPage(targetItemId) {
     });
 
     if (hasShopeeNativeButton || hasTable || hasLihatProduk) {
-      // Tunggu jeda 350ms agar react/vue selesai merender state DOM
-      await sleep(350);
+      await sleep(120);
       break;
     }
-    await sleep(200);
+    await sleep(80);
   }
 
   // 1. Ekstrak Item ID dari URL jika ada
@@ -1227,9 +1263,9 @@ async function runAutomateInPage(targetItemId) {
         clickTarget.click();
       } catch (e) {}
 
-      // Polling modal sampai 4 detik
-      for (let i = 0; i < 25; i++) {
-        await sleep(150);
+      // Polling modal cepat sampai 3 detik
+      for (let i = 0; i < 35; i++) {
+        await sleep(75);
         capturedLink = scanForShortlink();
 
         // Cari dan klik tombol "Salin Pautan" / "Salin Link" / "Copy Link" di modal jika muncul
