@@ -133,6 +133,8 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   snapshots   ProductSnapshot[]
+  latestSnapshotId String? @unique
+  latestSnapshot   ProductSnapshot? @relation("LatestSnapshot", fields: [latestSnapshotId], references: [id], onDelete: SetNull)
   pins        Pin[]
   contributors ProductContributor[]
 
@@ -170,6 +172,8 @@ model ProductSnapshot {
 
   scrapedAt      DateTime     @default(now())
   createdAt      DateTime     @default(now())
+
+  latestFor Product? @relation("LatestSnapshot")
 
   @@index([productId, scrapedAt])
   @@index([sales30d, growth30d])
