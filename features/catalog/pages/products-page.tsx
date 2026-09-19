@@ -31,7 +31,7 @@ interface ProductsPageProps {
 export function ProductsPage({ params, result, progress }: ProductsPageProps) {
   const remaining = Math.max(progress.target - progress.count, 0);
   return (
-    <div className="space-y-4 p-4">
+    <div className="w-full min-w-0 max-w-full space-y-4 overflow-x-clip p-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold">Products</h1>

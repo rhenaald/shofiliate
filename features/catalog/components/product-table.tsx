@@ -222,7 +222,7 @@ export function ProductTable({
     null;
 
   return (
-    <div className="space-y-4">
+    <div className="w-full min-w-0 max-w-full space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <DataTableViewOptions
           table={table}
@@ -234,12 +234,9 @@ export function ProductTable({
           onClearSort={onClearSort}
         />
       </div>
-      {/* FIXME: Table container x-overflow not fully contained within layout bounds. Investigate and constrain horizontal overflow properly. */}
-      <ScrollArea className="w-full rounded-md border">
-        <Table
-          containerClassName="overflow-visible"
-          className="w-full min-w-max"
-        >
+      {/* Styled scroll: Root constrains width, Viewport (overflow:scroll) owns x-scroll. */}
+      <ScrollArea className="w-full min-w-0 max-w-full overflow-hidden rounded-md border">
+        <Table containerClassName="overflow-visible" className="w-full min-w-max">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
