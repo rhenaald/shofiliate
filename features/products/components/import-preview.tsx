@@ -69,7 +69,7 @@ export function ImportPreview({
 }: ImportPreviewProps) {
   const [rows, setRows] = React.useState<RawImportRow[]>(initialRows);
   const totalRows = rows.length;
-  const previewRows = rows.slice(0, 10);
+  const [filterMode, setFilterMode] = React.useState<"all" | "unenriched">("all");
 
   const {
     isExtensionInstalled,
@@ -98,6 +98,28 @@ export function ImportPreview({
   }, [rows]);
 
   const hasUnenriched = enrichedCount < totalRows;
+
+  // Daftar baris yang ditampilkan sesuai mode filter (Semua atau Belum Lengkap)
+  const displayRows = React.useMemo(() => {
+    const mapped = rows.map((row, originalIdx) => ({ row, originalIdx }));
+    if (filterMode === "unenriched") {
+      return mapped.filter(({ row }) => {
+        const link = String(row.affiliate_link || row.affiliate_url || "").trim();
+        const isRealAffLink =
+          link.includes("s.shopee.") ||
+          link.includes("shope.ee") ||
+          link.includes("utm_source=an_");
+        const hasComm = Boolean(
+          row.commission_rate ||
+          row.commission_live_rate ||
+          row.commission_amount ||
+          row.commission_live_amount
+        );
+        return !(isRealAffLink && hasComm);
+      });
+    }
+    return mapped;
+  }, [rows, filterMode]);
 
   const [singleScrapingIndex, setSingleScrapingIndex] = React.useState<number | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
@@ -371,16 +393,45 @@ export function ImportPreview({
         </div>
       )}
 
-      {/* Preview Table (10 rows) */}
+      {/* Preview Table - Seluruh Produk */}
       <div className="rounded-xl border border-border/70 overflow-hidden bg-card shadow-xs">
-        <div className="px-4 py-3 border-b border-border/60 bg-muted/40 flex items-center justify-between">
-          <span className="text-xs font-semibold text-foreground">
-            Preview 10 Baris Pertama
-          </span>
+        <div className="px-4 py-2.5 border-b border-border/60 bg-muted/40 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-foreground">
+              Daftar Produk ({displayRows.length} dari {totalRows})
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-background/80 p-0.5 rounded-lg border border-border/60">
+            <button
+              type="button"
+              onClick={() => setFilterMode("all")}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${
+                filterMode === "all"
+                  ? "bg-primary text-primary-foreground shadow-2xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Semua ({totalRows})
+            </button>
+            {hasUnenriched && (
+              <button
+                type="button"
+                onClick={() => setFilterMode("unenriched")}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${
+                  filterMode === "unenriched"
+                    ? "bg-amber-500 text-white shadow-2xs"
+                    : "text-amber-600 dark:text-amber-400 hover:text-amber-700"
+                }`}
+              >
+                Belum Lengkap ({totalRows - enrichedCount})
+              </button>
+            )}
+          </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[640px] overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 bg-background/95 backdrop-blur z-10 shadow-2xs">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-12 text-xs">#</TableHead>
                 <TableHead className="text-xs">Product ID</TableHead>
@@ -396,7 +447,7 @@ export function ImportPreview({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {previewRows.map((row, idx) => {
+              {displayRows.map(({ row, originalIdx }) => {
                 const productUrl = String(row.product_url ?? row.url ?? "");
                 const affiliateLink = row.affiliate_link || row.affiliate_url;
                 const rate = row.commission_live_rate || row.commission_rate;
@@ -405,9 +456,9 @@ export function ImportPreview({
                 const rawRating = row.rating ?? row.rating_star ?? row.score ?? row.product_rating ?? row.shop_rating;
 
                 return (
-                  <TableRow key={idx} className="text-xs">
+                  <TableRow key={originalIdx} className="text-xs">
                     <TableCell className="font-mono text-muted-foreground">
-                      {idx + 1}
+                      {originalIdx + 1}
                     </TableCell>
                     <TableCell className="font-mono font-medium">
                       {String(row.product_id ?? "-")}
@@ -543,9 +594,9 @@ export function ImportPreview({
                               size="sm"
                               className="h-6 px-1.5 text-[10px] gap-1 text-primary hover:bg-primary/10 border border-primary/20"
                               disabled={singleScrapingIndex !== null || isEnriching}
-                              onClick={() => handleScrapeRow(idx, row)}
+                              onClick={() => handleScrapeRow(originalIdx, row)}
                             >
-                              {singleScrapingIndex === idx ? (
+                              {singleScrapingIndex === originalIdx ? (
                                 <Loader2Icon className="size-2.5 animate-spin" />
                               ) : (
                                 <SparklesIcon className="size-2.5" />

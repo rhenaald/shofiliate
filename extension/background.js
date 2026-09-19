@@ -361,8 +361,8 @@ async function fetchAffiliateDataForProduct(productUrl, itemId, region = "MY") {
   };
 }
 
-// Tunggu hingga tab memuat item spesifik (cek URL dan readyState secara cepat 80ms)
-async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 5000) {
+// Tunggu hingga tab memuat item spesifik (cek URL dan readyState secara cepat 100ms)
+async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 6000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     try {
@@ -371,7 +371,8 @@ async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 5000) {
         func: (id) => {
           const ready = document.readyState === "complete" || document.readyState === "interactive";
           const match = window.location.pathname.includes(String(id)) || window.location.href.includes(String(id));
-          return ready && match;
+          const hasContent = Boolean(document.body && document.body.children.length > 0);
+          return ready && match && hasContent;
         },
         args: [expectedItemId],
       });
@@ -381,16 +382,16 @@ async function waitForTabToLoadItem(tabId, expectedItemId, maxWaitMs = 5000) {
     } catch (e) {
       // Tab mungkin sedang proses navigasi
     }
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => setTimeout(r, 100));
   }
   return false;
 }
 
-// Multi-Worker Reusable Tab Pool: Menjalankan 2-3 tab latar belakang paralel yang didaur ulang
+// Multi-Worker Reusable Tab Pool: Menjalankan 2 tab latar belakang paralel yang didaur ulang
 async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
   if (!items || items.length === 0) return {};
 
-  const concurrency = items.length >= 10 ? 3 : Math.min(2, items.length);
+  const concurrency = Math.min(2, items.length); // 2 workers optimal untuk stabilitas dan menghindari rate-limit
   const resultsMap = {};
   const queue = [...items];
 
@@ -406,7 +407,7 @@ async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
     }
 
     // Tunggu tab pekerja selesai inisialisasi
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 300));
 
     // Jalankan setiap worker untuk mengambil tugas dari antrean secara paralel
     const workers = workerTabs.map(async (tab, workerIdx) => {
@@ -423,8 +424,8 @@ async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
           // Arahkan tab yang sama ke URL produk berikutnya (tanpa buka-tutup tab!)
           await chrome.tabs.update(tab.id, { url: targetUrl });
 
-          // Tunggu navigasi halaman ke item ID tersebut selesai
-          await waitForTabToLoadItem(tab.id, it.itemId, 4500);
+          // Tunggu navigasi halaman ke item ID tersebut selesai (maks 6 detik)
+          await waitForTabToLoadItem(tab.id, it.itemId, 6000);
 
           // Eksekusi skrip automasi native Shopee
           const res = await chrome.scripting.executeScript({
@@ -434,15 +435,27 @@ async function enrichItemsWithWorkerPool(items, domain, onProgressItem) {
           });
 
           const data = res?.[0]?.result;
-          if (data && (data.productName || data.itemId || data.affiliateLink)) {
+          const isSuccess = data && (data.live || data.social || data.video || data.affiliateLink || (data.price && data.price > 0));
+
+          if (isSuccess) {
+            resultsMap[it.itemId] = data;
+          } else if (!it._retried) {
+            // Jika run pertama belum sempat merender data komisi, coba sekali lagi
+            it._retried = true;
+            queue.push(it);
+          } else if (data) {
             resultsMap[it.itemId] = data;
           }
         } catch (err) {
           console.warn(`[Shofiliate Worker ${workerIdx + 1}] Gagal scrape ${it.itemId}:`, err);
+          if (!it._retried) {
+            it._retried = true;
+            queue.push(it);
+          }
         }
 
-        // Jeda kecil 120ms antar produk agar aman dan ramah server Shopee
-        await new Promise((r) => setTimeout(r, 120));
+        // Jeda 350ms antar produk agar aman dan ramah server Shopee
+        await new Promise((r) => setTimeout(r, 350));
       }
     });
 
@@ -1161,8 +1174,8 @@ async function runAutomateInPage(targetItemId) {
     );
   };
 
-  // 0.1 Tunggu SPA Shopee merender konten tabel / tombol jika tab baru dimuat (maks 4 detik)
-  for (let attempt = 0; attempt < 45; attempt++) {
+  // 0.1 Tunggu SPA Shopee merender konten tabel / tombol jika tab baru dimuat (maks 6 detik)
+  for (let attempt = 0; attempt < 60; attempt++) {
     const hasShopeeNativeButton = Array.from(
       document.querySelectorAll("button, [role='button'], a.ant-btn, a")
     ).some((el) => {
@@ -1181,18 +1194,16 @@ async function runAutomateInPage(targetItemId) {
       return (
         t === "lihat produk" ||
         t === "view product" ||
-        t === "lihat" ||
-        t === "view" ||
         t.includes("lihat produk") ||
         t.includes("view product")
       );
     });
 
     if (hasShopeeNativeButton || hasTable || hasLihatProduk) {
-      await sleep(120);
+      await sleep(150);
       break;
     }
-    await sleep(80);
+    await sleep(100);
   }
 
   // 1. Ekstrak Item ID dari URL jika ada
@@ -1265,9 +1276,9 @@ async function runAutomateInPage(targetItemId) {
         clickTarget.click();
       } catch (e) {}
 
-      // Polling modal cepat sampai 3 detik
-      for (let i = 0; i < 35; i++) {
-        await sleep(75);
+      // Polling modal cepat sampai 4 detik
+      for (let i = 0; i < 45; i++) {
+        await sleep(80);
         capturedLink = scanForShortlink();
 
         // Cari dan klik tombol "Salin Pautan" / "Salin Link" / "Copy Link" di modal jika muncul
