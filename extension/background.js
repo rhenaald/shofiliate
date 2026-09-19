@@ -1517,30 +1517,168 @@ async function runAutomateInPage(targetItemId) {
   // 7. Ekstraksi Rating Bintang (1.0 - 5.0)
   let rating = null;
   try {
-    const candidates = Array.from(document.querySelectorAll("span, div, p, em, b, strong"));
-    for (const el of candidates) {
-      if (isOurElement(el)) continue;
-      if (el.children.length > 2) continue;
-      const t = (el.textContent || "").trim();
-      const m = t.match(/^(?:⭐|★)?\s*([1-5](?:[.,]\d)?)\s*(?:\/\s*5)?$/);
-      if (m) {
-        const val = parseFloat(m[1].replace(",", "."));
-        if (!isNaN(val) && val >= 1.0 && val <= 5.0) {
-          const parentText = (el.parentElement?.textContent || "").toLowerCase();
-          const hasStarOrRating =
-            parentText.includes("rating") ||
-            parentText.includes("penilaian") ||
-            parentText.includes("bintang") ||
-            parentText.includes("star") ||
-            el.parentElement?.querySelector("svg, i, .anticon-star, .shopee-svg-icon");
-          if (hasStarOrRating) {
+    const isValidRating = (val) => typeof val === "number" && !isNaN(val) && val >= 1.0 && val <= 5.0;
+
+    // Helper untuk membersihkan teks penjualan dari string
+    const stripSoldText = (str) =>
+      str.replace(/[\d.,]+\s*(?:[KkMmRrBb]+)?\+?\s*(?:terjual|sold|đã bán|ขายแล้ว|已售|件已售)/gi, "").trim();
+
+    // Strategi 1: Cari di dekat teks penjualan ("terjual", "sold", "đã bán", "ขายแล้ว", "已售")
+    const allEls = Array.from(document.querySelectorAll("span, div, p, b, strong, em, a")).filter(
+      (el) => !isOurElement(el)
+    );
+
+    const soldElements = allEls.filter((el) => {
+      const txt = (el.textContent || "").trim();
+      return /(?:terjual|sold|đã bán|ขายแล้ว|已售)/i.test(txt) && txt.length < 80;
+    });
+
+    for (const soldEl of soldElements) {
+      if (rating) break;
+      const fullText = (soldEl.textContent || "").trim();
+      const cleaned = stripSoldText(fullText);
+
+      // A. Cek apakah di dalam elemen yang sama terdapat rating (misal: "⭐ 4.2 10RB+ terjual" atau "4.2 10RB+ terjual")
+      const mInline = cleaned.match(/(?:⭐|★)?\s*([1-5](?:[.,]\d))\b/);
+      if (mInline) {
+        const val = parseFloat(mInline[1].replace(",", "."));
+        if (isValidRating(val)) {
+          rating = val;
+          break;
+        }
+      }
+
+      // B. Cek sibling sebelum elemen terjual (biasanya rating berada tepat sebelum elemen terjual)
+      let prev = soldEl.previousElementSibling;
+      while (prev && !rating) {
+        const pTxt = (prev.textContent || "").trim();
+        const pMatch = pTxt.match(/^(?:⭐|★)?\s*([1-5](?:[.,]\d)?)\s*(?:\/\s*5)?$/);
+        if (pMatch) {
+          const val = parseFloat(pMatch[1].replace(",", "."));
+          if (isValidRating(val)) {
             rating = val;
             break;
-          } else if (!rating && (t.includes("★") || t.includes("⭐") || t.includes("/5"))) {
+          }
+        }
+        const innerMatch = pTxt.match(/(?:⭐|★)?\s*([1-5](?:[.,]\d))\b/);
+        if (innerMatch) {
+          const val = parseFloat(innerMatch[1].replace(",", "."));
+          if (isValidRating(val)) {
             rating = val;
+            break;
+          }
+        }
+        prev = prev.previousElementSibling;
+      }
+
+      // C. Cek elemen-elemen di dalam parent yang sama
+      if (!rating && soldEl.parentElement) {
+        const siblings = Array.from(soldEl.parentElement.children);
+        for (const sib of siblings) {
+          if (sib === soldEl || sib.contains(soldEl)) continue;
+          const sTxt = (sib.textContent || "").trim();
+          const sMatch = sTxt.match(/^(?:⭐|★)?\s*([1-5](?:[.,]\d)?)$/);
+          if (sMatch) {
+            const val = parseFloat(sMatch[1].replace(",", "."));
+            if (isValidRating(val)) {
+              rating = val;
+              break;
+            }
+          }
+          const sInner = sTxt.match(/(?:⭐|★)?\s*([1-5](?:[.,]\d))\b/);
+          if (sInner) {
+            const val = parseFloat(sInner[1].replace(",", "."));
+            if (isValidRating(val)) {
+              rating = val;
+              break;
+            }
           }
         }
       }
+    }
+
+    // Strategi 2: Cari di dalam Product Header Card (antara judul produk / Lihat Produk dan tombol Buat Link)
+    if (!rating) {
+      let cardContainer = null;
+      const anchorEl = lihatProduk || (allTextElements.length > 0 ? allTextElements[0] : null);
+      if (anchorEl) {
+        let p = anchorEl.parentElement;
+        for (let i = 0; i < 5 && p; i++) {
+          const pTxt = (p.textContent || "").toLowerCase();
+          if (
+            pTxt.includes("buat link") ||
+            pTxt.includes("get link") ||
+            pTxt.includes("dapatkan link") ||
+            pTxt.includes("rincian tawaran")
+          ) {
+            cardContainer = p;
+            break;
+          }
+          p = p.parentElement;
+        }
+      }
+
+      if (cardContainer) {
+        const cardEls = Array.from(cardContainer.querySelectorAll("span, div, b, strong, p, em")).filter(
+          (el) => !isOurElement(el)
+        );
+        for (const el of cardEls) {
+          if (el.children.length > 1) continue;
+          const t = (el.textContent || "").trim();
+          // Standalone angka desimal 1.0 - 5.0
+          const m = t.match(/^(?:⭐|★)?\s*([1-5]\.[0-9])\s*(?:\/\s*5)?$/);
+          if (m) {
+            const val = parseFloat(m[1].replace(",", "."));
+            if (isValidRating(val)) {
+              rating = val;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Strategi 3: Elemen dengan ikon Star / Rate
+    if (!rating) {
+      const starContainers = Array.from(
+        document.querySelectorAll("[class*='star'], [class*='rate'], [class*='rating'], svg, [aria-label*='rating' i]")
+      ).filter((el) => !isOurElement(el));
+
+      for (const starEl of starContainers) {
+        if (rating) break;
+        const p = starEl.parentElement;
+        if (!p) continue;
+        const pText = stripSoldText((p.textContent || "").trim());
+        const m = pText.match(/(?:^|\s|⭐|★)([1-5](?:[.,]\d))(?:\s|\/|$)/);
+        if (m) {
+          const val = parseFloat(m[1].replace(",", "."));
+          if (isValidRating(val)) {
+            rating = val;
+            break;
+          }
+        }
+      }
+    }
+
+    // Strategi 4: Fallback scan teks yang memuat simbol bintang
+    if (!rating) {
+      for (const el of allEls) {
+        if (el.children.length > 3) continue;
+        const t = (el.textContent || "").trim();
+        const m = t.match(/(?:⭐|★)\s*([1-5](?:[.,]\d)?)/) || t.match(/([1-5](?:[.,]\d)?)\s*(?:⭐|★)/);
+        if (m) {
+          const val = parseFloat(m[1].replace(",", "."));
+          if (isValidRating(val)) {
+            rating = val;
+            break;
+          }
+        }
+      }
+    }
+
+    // Normalisasi desimal 1 angka di belakang koma (misal: 4.2)
+    if (rating !== null) {
+      rating = Math.round(rating * 10) / 10;
     }
   } catch (e) {}
 
