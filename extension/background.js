@@ -932,6 +932,8 @@ async function enrichProductRows(rows, defaultRegion = "ID", tabId, requestId) {
       enrichedRows[it.idx] = it.row;
     });
 
+    let processedCount = invalidItems.length;
+
     // 4. Kumpulkan item yang membutuhkan automasi
     const itemsNeedingAutomation = [];
 
