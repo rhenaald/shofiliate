@@ -189,6 +189,51 @@ Solusi yang diusulkan: modul kurasi produk di dalam repo ini (`shofiliate`) deng
 | `total_sales`                                     | snapshot `historicalSold`              | int ≥ 0; ini dasar Best Seller                                                                                                                                                                  |
 | `product_url`                                     | `Product.url`                          | wajib URL Shopee valid                                                                                                                                                                          |
 
+- **Skema fully-enriched yang diterima import (Phase 2, tambahan 2026-09-19):** import menerima baris berbentuk data produk fully-enriched persis seperti di DB (hasil unduh staging bisa di-upload ulang tanpa perubahan). Contoh satu baris:
+
+```json
+[
+  {
+    "product_id": "21192726313",
+    "product_name": "COSRX The Vitamin C 13 Serum 20ml",
+    "seller_name": "GLAMPICK x COSRX Store",
+    "shopee_account": "live.akun.my",
+    "category": "Beauty-Skincare-Facial Serum & Essence",
+    "listed_on": "2023-09-04",
+    "likes": "290",
+    "sales_1d": "1",
+    "sales_7d": "4",
+    "sales_30d": "19",
+    "growth_30d": "-43.75%",
+    "gmv_30d": "RM1214.10",
+    "total_sales": "1000",
+    "total_gmv": "RM1214.10",
+    "product_url": "https://shopee.com.my/product/1060326459/21192726313",
+    "commission_live_rate": "8.5%",
+    "commission_live_amount": "RM4.10",
+    "commission_video_rate": "5%",
+    "commission_video_amount": "RM2.41",
+    "commission_social_rate": "5%",
+    "commission_social_amount": "RM2.41",
+    "has_komisi_xtra": true,
+    "komisi_xtra_rate": "2%",
+    "komisi_xtra_amount": "RM0.96",
+    "affiliate_link": "https://s.shopee.com.my/abc123"
+  }
+]
+```
+
+| Enrichment field | Sistem | Aturan parsing |
+| --- | --- | --- |
+| `commission_live/video/social_rate` | `Product` + snapshot `commissionLive/Video/SocialRate` | `"8.5%"`→`8.5`, `"8.5"`→`8.5`; `"-"`/kosong → null |
+| `commission_live/video/social_amount` | `Product` + snapshot `commissionLive/Video/SocialAmount` | string currency → amount (`"RM4.10"`→`4.10`); `"-"` → null |
+| `has_komisi_xtra`, `komisi_xtra_rate/amount` | `Product` + snapshot `hasKomisiXtra/komisiXtraRate/Amount` | `true`/`"true"`/`1` → true; rate/amount seperti di atas |
+| `affiliate_link` / `affiliate_url` | `Product.affiliateUrl` | opsional; bila terisi harus URL http(s) valid, invalid → null + warning (baris tetap tersimpan) |
+| `shopee_account` | `Product.shopeeAccount` | string bebas, trim, maks 100 char; `"-"`/kosong → null |
+| `commission_rate/commission_amount` (legacy) | fallback kanal bila rate kanal spesifik null | aturan sama seperti kanal |
+
+- **Validasi:** `importRowSchema` menerima kedua bentuk (mentah scraping maupun fully-enriched); semua field enrichment opsional dengan koersi `"-"`→null; round-trip dijamin (unduhan staging enriched valid untuk upload ulang); baris enrichment invalid tidak menggagalkan baris (null + warning), kecuali `product_id`/`product_url`/`product_name` yang tetap wajib seperti F1.
+
 - **Perilaku:**
   - Header CSV boleh snake_case persis seperti contoh atau JSON array of objects; tidak perlu mapping manual di MVP (format dikunci ke contoh ini). Jika header berbeda → tolak dengan pesan "format tidak dikenali, gunakan export extension v1".
   - Preview 10 baris pertama + hitung nilai `"-"` per kolom sebelum simpan.
@@ -624,7 +669,7 @@ Acceptance:
 - [ ] save semua vs tercentang benar
 - [ ] hanya baris valid bisa dipilih
 Links: <URL doc ini §6 F8 §9>
-Subs: [import] model staging + append; [import] tabel staging + seleksi; [import] save selektif ke DB
+Subs: [import] model staging + append; [import] enriched schema accept; [import] tabel staging + seleksi; [import] save selektif ke DB
 
 [import] Multi-file + unduh enriched (label: feature)
 Goal: Append multi-file tanpa hilang + unduh enriched kapan pun.
