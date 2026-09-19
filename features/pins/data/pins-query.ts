@@ -35,6 +35,8 @@ export interface PinSqlRow {
   commissionSocialAmount: string | null;
   commissionVideoAmount: string | null;
   likes: number;
+  sales1d: number;
+  sales7d: number;
   sales30d: number;
   growth30d: number;
   totalSales: number;
@@ -81,6 +83,8 @@ function pinsBoardQuery(f: ResolvedPinsFilters): Prisma.Sql {
       COALESCE(snap."commissionSocialAmount", p."commissionSocialAmount")::text AS "commissionSocialAmount",
       COALESCE(snap."commissionVideoAmount", p."commissionVideoAmount")::text AS "commissionVideoAmount",
       COALESCE(snap."likedCount", 0) AS "likes",
+      COALESCE(snap."sales1d", 0) AS "sales1d",
+      COALESCE(snap."sales7d", 0) AS "sales7d",
       COALESCE(snap."sales30d", 0) AS "sales30d",
       COALESCE(snap."growth30d", 0) AS "growth30d",
       COALESCE(snap."historicalSold", 0) AS "totalSales",
@@ -91,7 +95,7 @@ function pinsBoardQuery(f: ResolvedPinsFilters): Prisma.Sql {
     JOIN "user" u ON u."id" = pin."pinnedById"
     LEFT JOIN LATERAL (
       SELECT
-        s."likedCount", s."sales30d", s."growth30d", s."historicalSold",
+        s."likedCount", s."sales1d", s."sales7d", s."sales30d", s."growth30d", s."historicalSold",
         s."gmv30d", s."komisiXtraRate", s."commissionLiveAmount",
         s."commissionSocialAmount", s."commissionVideoAmount"
       FROM "ProductSnapshot" s
@@ -141,6 +145,8 @@ export function toPinDTO(r: PinSqlRow): PinDTO {
     category: r.category === "" ? "-" : r.category,
     listedOn: r.listedOn ? r.listedOn.toISOString() : null,
     likes: r.likes,
+    sales1d: r.sales1d,
+    sales7d: r.sales7d,
     sales30d: r.sales30d,
     growth30d: r.growth30d,
     totalSales: r.totalSales,

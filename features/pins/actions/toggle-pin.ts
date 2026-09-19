@@ -61,6 +61,8 @@ type PinWithRelations = Prisma.PinGetPayload<{
 type LatestSnapshot = Prisma.ProductSnapshotGetPayload<{
   select: {
     likedCount: true;
+    sales1d: true;
+    sales7d: true;
     sales30d: true;
     growth30d: true;
     historicalSold: true;
@@ -92,6 +94,8 @@ function toPinDTO(pin: PinWithRelations, snapshot: LatestSnapshot): PinDTO {
     category: product.category === "" ? "-" : product.category,
     listedOn: product.listedOn ? product.listedOn.toISOString() : null,
     likes: snapshot?.likedCount ?? 0,
+    sales1d: snapshot?.sales1d ?? 0,
+    sales7d: snapshot?.sales7d ?? 0,
     sales30d: snapshot?.sales30d ?? 0,
     growth30d: snapshot?.growth30d ?? 0,
     totalSales: snapshot?.historicalSold ?? 0,
@@ -157,6 +161,8 @@ export async function togglePin(input: unknown): Promise<PinDTO> {
     orderBy: [{ scrapedAt: "desc" }, { createdAt: "desc" }],
     select: {
       likedCount: true,
+      sales1d: true,
+      sales7d: true,
       sales30d: true,
       growth30d: true,
       historicalSold: true,
